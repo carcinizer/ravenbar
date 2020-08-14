@@ -8,13 +8,6 @@ mod window;
 fn main() -> Result<(), Box<dyn Error>> {
     let (conn, screen_num) = x11rb::connect(None).unwrap();
     let screen = &conn.setup().roots[screen_num];
-    /* let wndid = conn.generate_id()?;
-    conn.create_window(x11rb::COPY_DEPTH_FROM_PARENT, wndid, screen.root,
-                       0,0,300,300, 0, WindowClass::InputOutput, 0,
-                       &CreateWindowAux::new().background_pixel(screen.white_pixel))?;
-    conn.map_window(wndid)?;
-    conn.flush()?;
-    */
 
     let wnd = window::Window::new(&conn, &screen);
 
