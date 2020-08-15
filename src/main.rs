@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (conn, screen_num) = x11rb::connect(None).unwrap();
     let screen = &conn.setup().roots[screen_num];
 
-    let wnd = window::Window::new(&conn, &screen)?;
+    let wnd = window::Window::new(&conn, &screen, window::WindowGeometry{dir: window::Direction{xdir: 0, ydir: -1}, xoff: 0, yoff: 0, w: 500, h: 25})?;
 
     loop {
         let event = conn.wait_for_event()?;
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         
 
         match event {
-            Event::KeyPress(key) => {eprintln!("{:?}", key);},
+            Event::KeyPress(key) => {},
             _ => {}
         }
     }

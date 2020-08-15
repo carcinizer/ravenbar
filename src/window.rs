@@ -58,13 +58,59 @@ impl Drawable<'_> {
     }
 }
 
+
+pub struct Direction {
+    // -1 - left, 0 - center, 1 - right
+    pub xdir: i8,
+    // -1 - top, 0 - center, 1 - bottom
+    pub ydir: i8
+}
+
+
+pub struct WindowGeometry {
+    pub dir: Direction,
+    pub xoff: i16,
+    pub yoff: i16,
+    pub w: u16,
+    pub h: u16
+}
+
+impl WindowGeometry {
+    pub fn on_screen(&self, scrw: u16, scrh: u16) -> (i16, i16, u16, u16) {
+
+        let xoff = if self.dir.xdir == 0 {self.xoff} else {self.xoff.abs() * -self.dir.xdir as i16};
+        let yoff = if self.dir.ydir == 0 {self.yoff} else {self.yoff.abs() * -self.dir.ydir as i16};
+
+        let x = ((self.dir.xdir + 1) as i16) * (scrw - self.w) as i16 / 2 + xoff;
+        let y = ((self.dir.ydir + 1) as i16) * (scrh - self.h) as i16 / 2 + yoff;
+        let width = self.w;
+        let height = self.h;
+        
+        (x,y,width,height)
+    }
+
+    pub fn strut(&self) -> [u32; 12] {
+        [
+            if self.dir.xdir == -1 {(self.w as i16 + self.xoff) as u32} else {0},
+            if self.dir.xdir ==  1 {(self.w as i16 + self.xoff) as u32} else {0},
+            if self.dir.ydir == -1 {(self.h as i16 + self.yoff) as u32} else {0},
+            if self.dir.ydir ==  1 {(self.h as i16 + self.xoff) as u32} else {0},
+            0,0,0,0,0,0,0,0
+        ]
+    }
+}
+
 impl<T: Connection + ConnectionExt> Window<'_, T> {
-    pub fn new<'a>(conn: &'a T, screen: &Screen) -> Result<Window<'a, T>, Box<dyn Error>> {
+    pub fn new<'a>(conn: &'a T, screen: &Screen, geom: WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
                 
         let window = conn.generate_id()?;
 
+        let (x,y,w,h) = geom.on_screen(screen.width_in_pixels, screen.height_in_pixels);
+
+        println!("Window geom: {} {} {} {}", x,y,w,h);
+
         conn.create_window(x11rb::COPY_DEPTH_FROM_PARENT, window, screen.root,
-                           0,0,300,300, 0, WindowClass::InputOutput, 0,
+                           x,y,w,h, 0, WindowClass::InputOutput, 0,
                            &CreateWindowAux::new()
                                 .background_pixel(Color::new(255,100,200,150).as_xcolor())
                                 .event_mask(EventMask::Exposure
@@ -86,6 +132,18 @@ impl<T: Connection + ConnectionExt> Window<'_, T> {
                        &[wnd.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;
         wnd.set_atom32(b"_NET_WM_DESKTOP", PropMode::Replace, AtomEnum::CARDINAL, 
                        &[0xFFFFFFFF])?;
+        wnd.set_atom32(b"_NET_WM_STATE", PropMode::Replace, AtomEnum::ATOM, 
+                       &[wnd.get_atom(b"_NET_WM_STATE_STICKY")?])?;
+
+
+
+        wnd.set_atom32(b"_NET_WM_STRUT", PropMode::Replace, AtomEnum::ATOM, 
+                       &geom.strut()[0..4])?;
+        wnd.set_atom32(b"_NET_WM_STRUT_PARTIAL", PropMode::Replace, AtomEnum::ATOM, 
+                       &geom.strut())?;
+
+        // Ensure window's position
+        wnd.conn.configure_window(wnd.window, &ConfigureWindowAux::new().x(x as i32).y(y as i32))?;
         
         wnd.flush()?;
 
