@@ -1,13 +1,15 @@
 
 use std::error::Error;
+use std::collections::HashMap;
 
-use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
 use x11rb::errors::ConnectionError;
+use x11rb::connection::Connection;
+use x11rb::wrapper::ConnectionExt;
 
 
-pub struct Window<'a, T: Connection> {
+pub struct Window<'a, T: Connection + ConnectionExt> {
     window : u32,
     colormap : u32,
     conn : &'a T
@@ -35,7 +37,7 @@ pub enum Drawable<'a> {
 }
 
 impl Drawable<'_> {
-    pub fn draw<T: Connection>(&self, window: &Window<T>, rect: Rectangle) -> Result<(), Box<dyn Error>> {
+    pub fn draw<T: Connection + ConnectionExt>(&self, window: &Window<T>, rect: Rectangle) -> Result<(), Box<dyn Error>> {
         match self {
             Drawable::Rect(c) => {
                 let gc = window.conn.generate_id()?;
@@ -56,10 +58,10 @@ impl Drawable<'_> {
     }
 }
 
-impl<T: Connection> Window<'_, T> {
+impl<T: Connection + ConnectionExt> Window<'_, T> {
     pub fn new<'a>(conn: &'a T, screen: &Screen) -> Result<Window<'a, T>, Box<dyn Error>> {
                 
-        let window   = conn.generate_id()?;
+        let window = conn.generate_id()?;
 
         conn.create_window(x11rb::COPY_DEPTH_FROM_PARENT, window, screen.root,
                            0,0,300,300, 0, WindowClass::InputOutput, 0,
@@ -72,10 +74,43 @@ impl<T: Connection> Window<'_, T> {
 
 
         let colormap = screen.default_colormap;
+        
+        conn.change_property8(PropMode::Replace, window, AtomEnum::WM_NAME, AtomEnum::STRING, b"Ravenbar")?;
 
         conn.map_window(window)?;
         conn.flush()?;
 
-        Ok( Window {window, colormap, conn} )
+        let wnd = Window {window, colormap, conn};
+
+        wnd.set_atom32(b"_NET_WM_WINDOW_TYPE", PropMode::Replace, AtomEnum::ATOM, 
+                       &[wnd.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;
+        wnd.set_atom32(b"_NET_WM_DESKTOP", PropMode::Replace, AtomEnum::CARDINAL, 
+                       &[0xFFFFFFFF])?;
+        
+        wnd.flush()?;
+
+        Ok(wnd)
+    }
+
+    pub fn get_atom(&self, name: &[u8]) -> Result<Atom, Box<dyn Error>> {
+        Ok(self.conn.intern_atom(false, name)?.reply()?.atom)
+    }
+
+    pub fn set_atom8(&self, name: &[u8], mode: PropMode, atype: AtomEnum, data: &[u8]) -> Result<(), Box<dyn Error>>{
+        let atom = self.get_atom(name)?;
+        
+        self.conn.change_property8(mode, self.window, atom, atype, data)?;
+        Ok(())
+    }
+
+    pub fn set_atom32(&self, name: &[u8], mode: PropMode, atype: AtomEnum, data: &[u32]) -> Result<(), Box<dyn Error>>{
+        let atom = self.get_atom(name)?;
+        
+        self.conn.change_property32(mode, self.window, atom, atype, data)?;
+        Ok(())
+    }
+
+    pub fn flush(&self) -> Result<(), ConnectionError> {
+        self.conn.flush()
     }
 }

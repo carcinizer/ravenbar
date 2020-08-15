@@ -16,7 +16,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         let event = conn.wait_for_event()?;
         println!("{:?}", event);
         
-        window::Drawable::Rect(window::Color::new(255,255,0,255)).draw(&wnd, Rectangle{x:10, y:10, width:100, height:100})?;
 
         match event {
             Event::KeyPress(key) => {eprintln!("{:?}", key);},
