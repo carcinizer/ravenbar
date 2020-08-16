@@ -89,7 +89,7 @@ impl BarConfig {
                         else {panic!("'widgets' value must be an array")}
                     }
                     _ => {
-                        bar_props_proto.get_default_mut(event, Map::new()).insert(prop, val.to_owned());
+                        bar_props_proto.entry(event).or_default().insert(prop, val.to_owned());
                     }
                 }
             }
@@ -131,7 +131,7 @@ impl BarConfigWidget {
             for (key, val) in values {
                 let (prop, event) = split_key(key);
                 
-                widget_props_proto.get_default_mut(event, Map::new()).insert(prop, val.to_owned());
+                widget_props_proto.entry(event).or_default().insert(prop, val.to_owned());
             }
 
             Ok(Self { 
@@ -157,18 +157,6 @@ fn split_key(key: &str) -> (String, String) { // TODO Result
     (prop, event)
 }
 
-trait DefaultGet<K, V> {
-    fn get_default_mut(&mut self, key: K, default: V) -> &mut V;
-}
-
-impl<K: std::hash::Hash+Eq+Clone, V> DefaultGet<K, V> for HashMap<K, V> {
-    fn get_default_mut(&mut self, key: K, default: V) -> &mut V {
-        if let None = self.get(&key) {
-            self.insert(key.clone(), default);
-        }
-        self.get_mut(&key).unwrap()
-    }
-}
 
 fn mix_options<T: Clone>(parent: &Option<T>, child: &Option<T>) -> Option<T> {
     match child {
