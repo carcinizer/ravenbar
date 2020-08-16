@@ -41,14 +41,6 @@ struct BarConfigProps {
     height: Option<i32>
 }
 
-impl BarConfigProps {
-    fn new() -> Self {
-        Self {
-            alignment: Some("NW".to_owned()),
-            height: Some(24)
-        }
-    }
-}
 
 #[derive(Deserialize, Clone, Debug)]
 struct BarConfigWidgetProps {
@@ -73,9 +65,9 @@ impl BarConfig {
     pub fn new(filename: &str) -> Result<Self, Box<dyn Error>> {
         let file = File::open(filename)?;
 
-        let mut default_widget;
+        let mut default_widget = BarConfigWidget::new();
         let mut bar_props_proto = HashMap::<String, Map<String, Value>>::new();
-        let mut widget_arr = &Vec::<Value>::new();
+        let mut widget_arr = Vec::<Value>::new();
 
         let values : Value = from_reader(file)?;
 
@@ -88,11 +80,11 @@ impl BarConfig {
                         if event != "default" {
                             panic!("Events are unapplicable to 'defaults' section");
                         }
-                        default_widget = BarConfigWidget::create(val);
+                        default_widget = BarConfigWidget::create(val)?;
                     }
                     "widgets" => {
                         if let Value::Array(arr) = val {
-                            widget_arr = arr;
+                            widget_arr = arr.clone();
                         }
                         else {panic!("'widgets' value must be an array")}
                     }
@@ -104,16 +96,25 @@ impl BarConfig {
         }
         else {panic!("Bar config does not contain a JSON root object")} // TODO Result
         
-        let props = bar_props_proto
-                        .iter().map(|(k,v)| 
-                            (k.to_owned(), from_value(Value::Object(v.to_owned())).unwrap()) 
+        let mut props = bar_props_proto
+                        .iter().map(| (k,v)| 
+                            (k.to_owned(), 
+                             from_value::<BarConfigProps>(Value::Object(v.to_owned()))
+                                .unwrap()) 
                         ).collect();
-        /*let widgets: Vec<BarConfigWidget> = widget_arr
-                        .iter().map(|w| 
-                            BarConfigWidget::create(w).unwrap())
-                        .collect();
-*/
-        Ok(BarConfig {props, widgets: Vec::new()})
+        
+
+        let widgets: Vec<BarConfigWidget> = widget_arr
+                        .iter().map(|v| {
+                            let mut widget = BarConfigWidget::create(v).unwrap();
+                            
+                            for (k, p) in widget.props.iter_mut() {
+                                p.mix(default_widget.props.get(k).unwrap());
+                            };
+                            widget
+                        }).collect();
+
+        Ok(BarConfig {props, widgets})
     }
 }
 
@@ -168,13 +169,43 @@ impl<K: std::hash::Hash+Eq+Clone, V> DefaultGet<K, V> for HashMap<K, V> {
         self.get_mut(&key).unwrap()
     }
 }
+
+fn mix_options<T: Clone>(parent: &Option<T>, child: &Option<T>) -> Option<T> {
+    match child {
+        Some(x) => Some(x.clone()),
+        None => match parent {Some(y) => Some(y.clone()), None => None}
+    }
+}
+
 impl BarConfigWidgetProps {
-    fn new() -> BarConfigWidgetProps {
-        BarConfigWidgetProps { 
-            background: Some("0x222233".to_owned()), 
-            foreground: Some("0x222233".to_owned()),
-            command: Some("#NONE".to_owned())
+    pub fn new() -> Self {
+        Self { 
+            background: None,
+            foreground: None,
+            command: None
         }
+    }
+
+    pub fn mix(&mut self, parent: &Self) -> &mut Self {
+        self.background = mix_options(&parent.background, &self.background);
+        self.foreground = mix_options(&parent.foreground, &self.foreground);
+        self.command    = mix_options(&parent.command,    &self.command);
+        self
+    }
+}
+
+impl BarConfigProps {
+    pub fn new() -> Self {
+        Self {
+            alignment: None,
+            height: None
+        }
+    }
+
+    pub fn mix(&mut self, parent: &Self) -> &mut Self {
+        self.alignment = mix_options(&parent.alignment, &self.alignment);
+        self.height    = mix_options(&parent.height,    &self.height);
+        self
     }
 }
 
