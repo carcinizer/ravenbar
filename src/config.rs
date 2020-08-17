@@ -21,7 +21,8 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
 
         "widgets" : [
             {
-                "command": "date +%H:%M"
+                "command": "date +%H:%M",
+                "command.on_hover": "date +%H:%M:%S" // TODO TEST?
             },
             {
                 "command": "echo This is a test"
@@ -96,6 +97,7 @@ impl BarConfig {
         }
         else {panic!("Bar config does not contain a JSON root object")} // TODO Result
         
+
         let mut props = bar_props_proto
                         .iter().map(| (k,v)| 
                             (k.to_owned(), 
@@ -109,8 +111,14 @@ impl BarConfig {
                             let mut widget = BarConfigWidget::create(v).unwrap();
                             
                             for (k, p) in widget.props.iter_mut() {
-                                p.mix(default_widget.props.get(k).unwrap());
+                                p.mix(default_widget.props.get(k)
+                                        .unwrap_or(&BarConfigWidgetProps::new()));
                             };
+                            for (k, p) in default_widget.props.iter() {
+                                if let None = widget.props.get(k) {
+                                    widget.props.insert(k.to_owned(), p.to_owned());
+                                }
+                            }
                             widget
                         }).collect();
 
@@ -197,3 +205,10 @@ impl BarConfigProps {
     }
 }
 
+impl std::default::Default for BarConfigProps {
+    fn default() -> Self { Self::new() }
+}
+
+impl std::default::Default for BarConfigWidgetProps {
+    fn default() -> Self { Self::new() }
+}
