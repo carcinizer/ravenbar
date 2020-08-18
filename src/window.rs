@@ -39,6 +39,16 @@ pub enum Drawable {
 }
 
 impl Drawable {
+    pub fn from(s: String) -> Self { // TODO Error handling, as usual
+        if s.len() != 7 || &s[0..1] != "#" {
+            panic!("Only #XXXXXX format is currently acceptable")
+        }
+        let r = u8::from_str_radix(&s[1..3], 16).unwrap();
+        let g = u8::from_str_radix(&s[3..5], 16).unwrap();
+        let b = u8::from_str_radix(&s[5..7], 16).unwrap();
+        Drawable::Color( Color {r,g,b, a: 255} )
+    }
+
     pub fn draw_rect<T: XConnection>(&self, window: &Window<T>, rect: Rectangle)
         -> Result<(), Box<dyn Error>> 
     {
@@ -66,6 +76,21 @@ pub struct Direction {
     pub ydir: i8
 }
 
+impl Direction {
+    pub fn from(s: String) -> Self {
+        let xdir = match &s[0..1] {
+            "N" => -1,
+            "S" => 1,
+            _ => {panic!("{} is not a valid direction", s);}
+        };
+        let ydir = match &s[1..2] {
+            "W" => -1,
+            "E" => 1,
+            _ => {panic!("{} is not a valid direction", s);}
+        };
+        Self {xdir, ydir}
+    }
+}
 
 pub struct WindowGeometry {
     pub dir: Direction,

@@ -37,28 +37,28 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
 
 
 #[derive(Deserialize, Clone, Debug)]
-struct BarConfigProps {
-    alignment: Option<String>,
-    height: Option<i32>
+pub struct BarConfigProps {
+    pub alignment: Option<String>,
+    pub height: Option<i16>
 }
 
 
 #[derive(Deserialize, Clone, Debug)]
-struct BarConfigWidgetProps {
-    background: Option<String>,
-    foreground: Option<String>,
-    command: Option<String>
+pub struct BarConfigWidgetProps {
+    pub background: Option<String>,
+    pub foreground: Option<String>,
+    pub command: Option<String>
 }
 
 #[derive(Debug)]
-struct BarConfigWidget {
-    props: HashMap<String, BarConfigWidgetProps>
+pub struct BarConfigWidget {
+    pub props: HashMap<String, BarConfigWidgetProps>
 }
 
 #[derive(Debug)]
 pub struct BarConfig {
-    props: HashMap<String, BarConfigProps>,
-    widgets: Vec<BarConfigWidget>
+    pub props: HashMap<String, BarConfigProps>,
+    pub widgets: Vec<BarConfigWidget>
 }
 
 
