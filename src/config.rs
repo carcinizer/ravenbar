@@ -97,28 +97,44 @@ impl BarConfig {
         }
         else {panic!("Bar config does not contain a JSON root object")} // TODO Result
         
-
-        let mut props = bar_props_proto
-                        .iter().map(| (k,v)| 
+        // Convert bar props from raw to intermediate form 
+        let mut props : HashMap<String, BarConfigProps> = bar_props_proto
+                        .iter().map(|(k,v)| 
                             (k.to_owned(), 
                              from_value::<BarConfigProps>(Value::Object(v.to_owned()))
                                 .unwrap()) 
                         ).collect();
         
+        // Mix each event prop with default event prop
+        let default_prop = props.entry("default".to_owned()).or_default().clone();
 
-        let widgets: Vec<BarConfigWidget> = widget_arr
+        for i in props.values_mut() {
+            i.mix(&default_prop);
+        }
+
+        let mut widgets: Vec<BarConfigWidget> = widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
                             
-                            for (k, p) in widget.props.iter_mut() {
-                                p.mix(default_widget.props.get(k)
-                                        .unwrap_or(&BarConfigWidgetProps::new()));
-                            };
+                            // Add the rest of events that exist in 'defaults'
+                            // section but not in the widget
                             for (k, p) in default_widget.props.iter() {
                                 if let None = widget.props.get(k) {
                                     widget.props.insert(k.to_owned(), p.to_owned());
                                 }
                             }
+                            // Mix props with those from 'defaults' section for each event
+                            for (k, p) in widget.props.iter_mut() {
+                                p.mix(default_widget.props.entry(k.to_owned()).or_default());
+                            }
+
+                            // Mix again, this time with default event prop
+                            let default_prop = widget.props.entry("default".to_owned())
+                                                           .or_default().clone();
+                            for p in widget.props.values_mut() {
+                                p.mix(&default_prop);
+                            }
+                            
                             widget
                         }).collect();
 

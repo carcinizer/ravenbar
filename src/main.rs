@@ -9,7 +9,7 @@ mod config;
 mod window;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let (conn, screen_num) = x11rb::connect(None).unwrap();
+    let (conn, screen_num) = x11rb::connect(None)?;
     let screen = &conn.setup().roots[screen_num];
 
     let wnd = window::Window::new(&conn, &screen, window::WindowGeometry{dir: window::Direction{xdir: 0, ydir: -1}, xoff: 0, yoff: 0, w: 500, h: 25})?;

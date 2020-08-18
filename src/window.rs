@@ -8,8 +8,11 @@ use x11rb::errors::ConnectionError;
 use x11rb::connection::Connection;
 use x11rb::wrapper::ConnectionExt;
 
+// Just an alias for convenience
+pub trait XConnection: Connection + ConnectionExt {}
+impl<T: Connection + ConnectionExt> XConnection for T {}
 
-pub struct Window<'a, T: Connection + ConnectionExt> {
+pub struct Window<'a, T: XConnection> {
     window : u32,
     colormap : u32,
     conn : &'a T
@@ -31,15 +34,16 @@ impl Color {
     }
 }
 
-pub enum Drawable<'a> {
-    Rect(Color),
-    Text(Color, &'a str)
+pub enum Drawable {
+    Color(Color)
 }
 
-impl Drawable<'_> {
-    pub fn draw<T: Connection + ConnectionExt>(&self, window: &Window<T>, rect: Rectangle) -> Result<(), Box<dyn Error>> {
+impl Drawable {
+    pub fn draw_rect<T: XConnection>(&self, window: &Window<T>, rect: Rectangle)
+        -> Result<(), Box<dyn Error>> 
+    {
         match self {
-            Drawable::Rect(c) => {
+            Drawable::Color(c) => {
                 let gc = window.conn.generate_id()?;
 
                 window.conn.create_gc(gc, window.window, &CreateGCAux::new().foreground(c.as_xcolor()))?;
@@ -48,10 +52,6 @@ impl Drawable<'_> {
                 window.conn.flush()?;
 
                 window.conn.free_gc(gc)?;
-            }
-
-            Drawable::Text(c, text) => {
-                // TODO
             }
         }
         Ok(())
@@ -100,7 +100,7 @@ impl WindowGeometry {
     }
 }
 
-impl<T: Connection + ConnectionExt> Window<'_, T> {
+impl<T: XConnection> Window<'_, T> {
     pub fn new<'a>(conn: &'a T, screen: &Screen, geom: WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
                 
         let window = conn.generate_id()?;
