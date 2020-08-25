@@ -70,8 +70,8 @@ impl Font<'_> {
                     let arrpos = (y*rect.width as i16 + x) as usize * 4;
                     if arrpos < data.len() {
 
-                        for _ in 0..3 {
-                            data[arrpos] = (v*255.) as _;
+                        for i in 0..3 {
+                            data[arrpos+i] = (v*255.) as _;
                         }
                     }
                 })
@@ -82,7 +82,6 @@ impl Font<'_> {
         let gc = window.conn.generate_id()?;
         window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
 
-        //crate::window::Drawable::from("#FFFF00".to_string()).draw_rect(window, Rectangle{x,y, width: rect.width, height: rect.height})?;
         window.conn.put_image(
             ImageFormat::ZPixmap, 
             window.window, 
@@ -95,12 +94,7 @@ impl Font<'_> {
             24, 
             &data)?;
         
-        
-
         window.conn.free_gc(gc)?;
-
-        println!("Text geom: {} {} {} {}", x,y,rect.width, rect.height);
-
         Ok(rect.width)
     }
     
