@@ -13,9 +13,11 @@ pub trait XConnection: Connection + ConnectionExt {}
 impl<T: Connection + ConnectionExt> XConnection for T {}
 
 pub struct Window<'a, T: XConnection> {
-    window : u32,
-    colormap : u32,
-    conn : &'a T
+    // Maybe change this in the future
+    pub window: u32,
+    pub colormap: u32,
+    pub conn: &'a T,
+    pub fontconfig: fontconfig::Fontconfig
 }
 
 pub struct Color {
@@ -26,13 +28,25 @@ pub struct Color {
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
-        Color{r,g,b,a}
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self{r,g,b,a}
     }
+
+    pub fn from(s: String) -> Self {
+        if s.len() != 7 || &s[0..1] != "#" {
+            panic!("Only #XXXXXX format is currently acceptable")
+        }
+        let r = u8::from_str_radix(&s[1..3], 16).unwrap();
+        let g = u8::from_str_radix(&s[3..5], 16).unwrap();
+        let b = u8::from_str_radix(&s[5..7], 16).unwrap();
+        Self{r,g,b, a: 255}
+    }
+
     pub fn as_xcolor(&self) -> u32 {
         ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
     }
 }
+
 
 pub enum Drawable {
     Color(Color)
@@ -40,13 +54,7 @@ pub enum Drawable {
 
 impl Drawable {
     pub fn from(s: String) -> Self { // TODO Error handling, as usual
-        if s.len() != 7 || &s[0..1] != "#" {
-            panic!("Only #XXXXXX format is currently acceptable")
-        }
-        let r = u8::from_str_radix(&s[1..3], 16).unwrap();
-        let g = u8::from_str_radix(&s[3..5], 16).unwrap();
-        let b = u8::from_str_radix(&s[5..7], 16).unwrap();
-        Drawable::Color( Color {r,g,b, a: 255} )
+        Drawable::Color(Color::from(s))
     }
 
     pub fn draw_rect<T: XConnection>(&self, window: &Window<T>, rect: Rectangle)
@@ -66,6 +74,18 @@ impl Drawable {
         }
         Ok(())
     }
+
+    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, font: &crate::font::Font, s: String)
+        -> Result<u16, Box<dyn Error>> 
+    {
+        match self {
+            Drawable::Color(c) => {
+                let ret = font.draw_text(&s[..], window, x, y);
+                ret
+            }
+        }
+    }
+
 }
 
 
@@ -151,7 +171,9 @@ impl<T: XConnection> Window<'_, T> {
         conn.map_window(window)?;
         conn.flush()?;
 
-        let wnd = Window {window, colormap, conn};
+        let fontconfig = fontconfig::Fontconfig::new().unwrap();
+
+        let wnd = Window {window, colormap, conn, fontconfig};
 
         wnd.set_atom32(b"_NET_WM_WINDOW_TYPE", PropMode::Replace, AtomEnum::ATOM, 
                        &[wnd.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;

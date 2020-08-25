@@ -5,6 +5,7 @@ use x11rb::protocol::Event;
 use x11rb::protocol::xproto::Rectangle;
 
 mod bar;
+mod font;
 mod config;
 mod window;
 
@@ -16,13 +17,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     config::write_default_config("/home/michal/myravenbar.json")?;
     //println!("{:?}", config::BarConfig::new("/home/michal/myravenbar.json")?);
-    let _b = bar::Bar::create(config::BarConfig::new("/home/michal/myravenbar.json")?, &wnd);
+    let mut b = bar::Bar::create(config::BarConfig::new("/home/michal/myravenbar.json")?, &wnd);
 
     loop {
         let event = conn.wait_for_event()?;
+        
+        b.refresh(bar::Event::Default)?;
 
         match event {
             _ => {}
         }
+        conn.flush()?;
     }
 }

@@ -1,13 +1,13 @@
 
 use crate::window::*;
 use crate::config;
+use crate::font::Font;
 
 use std::collections::HashMap;
-
-//use x11rb::connection::{Connection, ConnectionExt};
+use x11rb::protocol::xproto::Rectangle;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
-enum Event {
+pub enum Event {
     Default,
     OnHover
 }
@@ -39,19 +39,20 @@ struct WidgetProps {
     command: Command
 }
 
-pub struct Widget {
+struct Widget {
     props : HashMap<Event, WidgetProps>
 }
 
 struct BarProps {
     alignment: Direction,
-    height: i16
+    height: u16
 }
 
 pub struct Bar<'a, T: XConnection> {
     widgets: Vec<Widget>,
     props: HashMap<Event, BarProps>,
-    window: &'a Window<'a, T>
+    window: &'a Window<'a, T>,
+    font: Font<'a>
 }
 
 impl<'a, T: XConnection> Bar<'a, T> {
@@ -64,7 +65,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     alignment: Direction::from(prop.alignment.as_ref().unwrap().to_owned()),
                     height: prop.height.unwrap_or(25)
                 }
-            )).collect();
+            )).collect::<HashMap<Event, BarProps>>();
 
         let widgets = cfg.widgets.iter()
             .map( |widget| {
@@ -85,6 +86,22 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 Widget {props}
             }).collect();
 
-        Self {props, widgets, window}
+        let font = Font::new("noto sans", props[&Event::Default].height, &window.fontconfig).unwrap(); // TODO - font from file
+
+        Self {props, widgets, window, font}
+    }
+
+    pub fn refresh(&mut self, event: Event) -> Result<(), Box<dyn std::error::Error>> {
+        
+        let mut widget_cursor = 0;
+        for i in self.widgets.iter() {
+            let props = &i.props[&event];
+
+            let traverse = props.foreground.draw_text(self.window, widget_cursor, 0, &self.font , "yxde".to_string())?;
+            widget_cursor += traverse as i16;
+        }
+        Ok(())
     }
 }
+
+

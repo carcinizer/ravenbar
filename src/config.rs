@@ -39,7 +39,7 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BarConfigProps {
     pub alignment: Option<String>,
-    pub height: Option<i16>
+    pub height: Option<u16>
 }
 
 
