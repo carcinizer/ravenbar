@@ -7,6 +7,7 @@ use x11rb::protocol::xproto::{Rectangle, ImageFormat, CreateGCAux, GX};
 use crate::window::{XConnection, Window};
 use std::error::Error;
 
+use unicode_normalization::UnicodeNormalization;
 
 pub type FontConfig = fontconfig::Fontconfig;
 
@@ -30,11 +31,11 @@ impl Font<'_> {
         Ok( Self {font, scale, max_ascent: vmetrics.ascent, max_descent: vmetrics.descent} )
     }
 
-    fn glyphs(&self, text: &str) -> Vec<rusttype::PositionedGlyph> {
-        self.font.layout(text, self.scale, point(0.0, self.max_ascent)).collect::<Vec<_>>()
+    fn glyphs(&self, text: &String) -> Vec<rusttype::PositionedGlyph> {
+        self.font.layout(&text[..], self.scale, point(0.0, self.max_ascent)).collect::<Vec<_>>()
     }
 
-    pub fn calc_text_rect(&self, original: Rectangle, text: &str) -> Rectangle {
+    pub fn calc_text_rect(&self, original: Rectangle, text: &String) -> Rectangle {
         let glyphs = self.glyphs(text);
         
         let width = glyphs
@@ -53,9 +54,11 @@ impl Font<'_> {
     pub fn draw_text<T: XConnection>(&self, text: &str, window: &Window<T>, x: i16, y: i16) -> Result<u16, Box<dyn Error>> {
         
         // Get glyphs and text extents
-        let glyphs = self.glyphs(text);
+        
+        let text_nfc = text.nfc().filter(|x| !x.is_control()).collect();
+        let glyphs = self.glyphs(&text_nfc);
 
-        let rect = self.calc_text_rect(Rectangle{x:0,y:0,width:0,height:0}, text);
+        let rect = self.calc_text_rect(Rectangle{x:0,y:0,width:0,height:0}, &text_nfc);
 
         // Draw glyphs to buffer
         let mut data = vec![0u8; (rect.width * rect.height * 4) as _];

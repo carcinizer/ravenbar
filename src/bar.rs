@@ -33,8 +33,21 @@ impl Command {
         Command::Shell(s.to_owned())
     }
 
-    fn execute(&self) -> String {
-        "todo".to_string()
+    fn execute(&self) -> Result<String, run_script::ScriptError> {
+        match self {
+            Self::Shell(s) => {
+                let (code, output, error) = run_script::run_script!(s)?;
+                if code != 0 {
+                    eprintln!("WARNING: '{}' returned {}", s, code);
+                }
+                if output != "" {
+                    eprintln!("WARNING: '{}' wrote to stderr:", s);
+                    eprintln!("{}", error);
+                }
+                Ok(output)
+            }
+            _ => Ok(String::new())
+        }
     }
 }
 
@@ -106,7 +119,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             let props = &i.props[&event];
 
-            let text = props.command.execute();
+            let text = props.command.execute()?;
             let width = props.foreground.draw_text(self.window, widget_cursor, 0, &self.font, &text)?;
             let avg_char_width: u16 = width as u16 / text.len() as u16;
 
