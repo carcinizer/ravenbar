@@ -168,33 +168,48 @@ impl<T: XConnection> Window<'_, T> {
         
         conn.change_property8(PropMode::Replace, window, AtomEnum::WM_NAME, AtomEnum::STRING, b"Ravenbar")?;
 
-        conn.map_window(window)?;
         conn.flush()?;
 
         let fontconfig = fontconfig::Fontconfig::new().unwrap();
 
         let wnd = Window {window, colormap, conn, fontconfig};
 
-        wnd.set_atom32(b"_NET_WM_WINDOW_TYPE", PropMode::Replace, AtomEnum::ATOM, 
-                       &[wnd.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;
-        wnd.set_atom32(b"_NET_WM_DESKTOP", PropMode::Replace, AtomEnum::CARDINAL, 
-                       &[0xFFFFFFFF])?;
-        wnd.set_atom32(b"_NET_WM_STATE", PropMode::Replace, AtomEnum::ATOM, 
-                       &[wnd.get_atom(b"_NET_WM_STATE_STICKY")?])?;
-
-
-
-        wnd.set_atom32(b"_NET_WM_STRUT", PropMode::Replace, AtomEnum::ATOM, 
-                       &geom.strut()[0..4])?;
-        wnd.set_atom32(b"_NET_WM_STRUT_PARTIAL", PropMode::Replace, AtomEnum::ATOM, 
-                       &geom.strut())?;
-
-        // Ensure window's position
-        wnd.conn.configure_window(wnd.window, &ConfigureWindowAux::new().x(x as i32).y(y as i32))?;
-        
-        wnd.flush()?;
+        wnd.configure(screen, geom)?;
 
         Ok(wnd)
+    }
+
+    pub fn configure(&self, screen: &Screen, geom: WindowGeometry) -> Result<(), Box<dyn Error>> {
+
+        let (x,y,w,h) = geom.on_screen(screen.width_in_pixels, screen.height_in_pixels);
+
+
+        self.set_atom32(b"_NET_WM_WINDOW_TYPE", PropMode::Replace, AtomEnum::ATOM, 
+                       &[self.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;
+        self.set_atom32(b"_NET_WM_DESKTOP", PropMode::Replace, AtomEnum::CARDINAL, 
+                       &[0xFFFFFFFF])?;
+        self.set_atom32(b"_NET_WM_STATE", PropMode::Replace, AtomEnum::ATOM, 
+                       &[self.get_atom(b"_NET_WM_STATE_STICKY")?,
+                         self.get_atom(b"_NET_WM_STATE_STAYS_ON_TOP")?])?;
+        self.set_atom32(b"_NET_WM_ALLOWED_ACTIONS", PropMode::Replace, AtomEnum::ATOM, 
+                       &[])?;
+
+
+
+        self.set_atom32(b"_NET_WM_STRUT", PropMode::Replace, AtomEnum::CARDINAL, 
+                       &geom.strut()[0..4])?;
+        self.set_atom32(b"_NET_WM_STRUT_PARTIAL", PropMode::Replace, AtomEnum::CARDINAL, 
+                       &geom.strut())?;
+
+        std::thread::sleep_ms(1000);
+
+        self.conn.map_window(self.window)?;
+
+        // Ensure window's position
+        self.conn.configure_window(self.window, &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32))?;
+        
+        self.flush()?;
+        Ok(())
     }
 
     pub fn get_atom(&self, name: &[u8]) -> Result<Atom, Box<dyn Error>> {
