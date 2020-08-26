@@ -57,7 +57,20 @@ impl Drawable {
         Drawable::Color(Color::from(s))
     }
 
-    pub fn draw_rect<T: XConnection>(&self, window: &Window<T>, rect: Rectangle)
+    fn image(&self, _x: i16, _y: i16, width: u16, height: u16, _maxheight: u16) -> Vec<u8> {
+        match self {
+            Self::Color(c) => {
+                let mut v = Vec::with_capacity((width * height * 4) as _);
+
+                for _ in 0..(width * height) {
+                    v.extend(&[c.b, c.r, c.g, c.a]);
+                }
+                v
+            }
+        }
+    }
+
+    pub fn draw_bg<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16)
         -> Result<(), Box<dyn Error>> 
     {
         match self {
@@ -65,6 +78,8 @@ impl Drawable {
                 let gc = window.conn.generate_id()?;
 
                 window.conn.create_gc(gc, window.window, &CreateGCAux::new().foreground(c.as_xcolor()))?;
+
+                let rect = Rectangle {x,y,width,height};
                 window.conn.poly_fill_rectangle(window.window, gc, &[rect])?;
                 
                 window.conn.flush()?;
@@ -75,13 +90,48 @@ impl Drawable {
         Ok(())
     }
 
-    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, height: u16, font: &crate::font::Font, s: &String)
+    fn draw_image<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+        
+        let gc = window.conn.generate_id()?;
+        window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
+
+        window.conn.put_image(
+            ImageFormat::ZPixmap, 
+            window.window, 
+            gc, 
+            width, 
+            height,
+            x,
+            y,
+            0, 
+            24, 
+            &data)?;
+        
+        window.conn.free_gc(gc)?;
+        Ok(())
+    }
+
+    pub fn draw_fg<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, height: u16, border_factor: f32, font: &crate::font::Font, background: &Drawable, text: &String)
         -> Result<u16, Box<dyn Error>> 
     {
         match self {
-            Drawable::Color(c) => {
-                let ret = font.draw_text(&s[..], window, x, y, height);
-                ret
+            Drawable::Color(_) => {
+
+                let fgheight = font.height((height as f32 * border_factor).ceil() as _);
+                let fgy = y + ((height - fgheight) / 2) as i16;
+                
+                let (glyphs, width) = font.glyphs_and_width(text, fgheight);
+                
+                let fg =     self      .image(x,fgy,width,fgheight,height);
+                let mut bg = background.image(x,fgy,width,fgheight,height);
+
+                font.draw_text(width, glyphs, &fg, &mut bg)?;
+
+                self.draw_image(window, x, fgy, width, fgheight, &bg)?;
+                background.draw_bg(window, x, y, width, (fgy - y) as _)?;
+                background.draw_bg(window, x, fgy+fgheight as i16, width, (fgy - y) as _)?;
+
+                Ok(width)
             }
         }
     }

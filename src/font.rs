@@ -46,18 +46,15 @@ impl Font<'_> {
             .unwrap_or(0.0).ceil() as _
     }
 
-    pub fn draw_text<T: XConnection>(&self, text: &str, window: &Window<T>, x: i16, y: i16, height: u16) -> Result<u16, Box<dyn Error>> {
-        
-        // Get glyphs and text extents
-        
+    pub fn glyphs_and_width(&self, text: &String, height: u16) -> (Vec<PositionedGlyph>, u16) {
         let text_nfc = text.nfc().filter(|x| !x.is_control()).collect();
         let glyphs = self.glyphs(&text_nfc, height);
-
         let width = self.calc_width(&glyphs);
+        (glyphs, width)
+    }
 
-        // Draw glyphs to buffer
-        let mut data = vec![0u8; (width * height * 4) as _];
-        
+    pub fn draw_text(&self, width: u16, glyphs: Vec<PositionedGlyph>, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+
         for g in glyphs {
             if let Some(bb) = g.pixel_bounding_box() {
                 g.draw( |x,y,v| {
@@ -66,38 +63,25 @@ impl Font<'_> {
                     let y = y as i16 + bb.min.y as i16;
 
                     let arrpos = (y*width as i16 + x) as usize * 4;
-                    if arrpos < data.len() {
+                    if arrpos < bg.len() {
 
                         for i in 0..3 {
-                            data[arrpos+i] = (v*255.) as _;
+                            bg[arrpos+i] = combine_comp(fg[arrpos+i], bg[arrpos+i], v);
                         }
                     }
                 })
             }
         }
 
-        // Draw image to window
-        let gc = window.conn.generate_id()?;
-        window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
-
-        window.conn.put_image(
-            ImageFormat::ZPixmap, 
-            window.window, 
-            gc, 
-            width, 
-            height,
-            x,
-            y,
-            0, 
-            24, 
-            &data)?;
-        
-        window.conn.free_gc(gc)?;
-        Ok(width)
+        Ok(())
     }
     
 }
 
 fn scale(height: u16) -> Scale {
     Scale{x: height as f32, y: height as f32}
+}
+
+fn combine_comp(a: u8, b: u8, factor: f32) -> u8 {
+    (a as f32 * factor + b as f32 * (1.0 - factor)) as _
 }

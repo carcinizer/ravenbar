@@ -125,12 +125,10 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets.iter_mut() {
 
             let props = &i.props[&event];
-            let height = self.font.height((bar.height as f32 * props.border_factor).ceil() as _);
-            let y = (bar.height - height) / 2;
 
             let text = props.command.execute()?;
 
-            let width = props.foreground.draw_text(self.window, widget_cursor, y as _, height, &self.font, &text)?;
+            let width = props.foreground.draw_fg(self.window, widget_cursor, 0, bar.height, props.border_factor, &self.font, &props.background, &text)?;
             let avg_char_width: u16 = width as u16 / text.len() as u16;
 
             if width > i.width_max || width < i.width_min {
