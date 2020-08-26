@@ -57,7 +57,8 @@ impl Command {
 struct WidgetProps {
     foreground: Drawable,
     background: Drawable,
-    command: Command
+    command: Command,
+    border_factor: f32
 }
 
 struct Widget {
@@ -104,13 +105,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
                                             .background.as_ref()
                                             .unwrap_or(&"#222233".to_owned()).to_owned()),
                             command: Command::from(&prop.command
-                                            .as_ref().unwrap_or(&"".to_owned()).to_owned())
+                                            .as_ref().unwrap_or(&"".to_owned()).to_owned()),
+                            border_factor: prop.border_factor.unwrap_or(0.9),
                         }
                 )).collect();
                 Widget {props, width_min: 0, width_max: 0}
             }).collect();
 
-        let font = Font::new("noto sans", props[&Event::Default].height, &window.fontconfig).unwrap(); // TODO - font from file
+        let font = Font::new("noto sans", &window.fontconfig).unwrap(); // TODO - font from file
 
         Self {props, widgets, window, font}
     }
@@ -118,12 +120,17 @@ impl<'a, T: XConnection> Bar<'a, T> {
     pub fn refresh(&mut self, event: Event) -> Result<(), Box<dyn std::error::Error>> {
         
         let mut widget_cursor = 0;
+        let bar = &self.props[&event];
+
         for i in self.widgets.iter_mut() {
 
             let props = &i.props[&event];
+            let height = self.font.height((bar.height as f32 * props.border_factor).ceil() as _);
+            let y = (bar.height - height) / 2;
 
             let text = props.command.execute()?;
-            let width = props.foreground.draw_text(self.window, widget_cursor, 0, &self.font, &text)?;
+
+            let width = props.foreground.draw_text(self.window, widget_cursor, y as _, height, &self.font, &text)?;
             let avg_char_width: u16 = width as u16 / text.len() as u16;
 
             if width > i.width_max || width < i.width_min {

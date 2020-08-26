@@ -75,12 +75,12 @@ impl Drawable {
         Ok(())
     }
 
-    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, font: &crate::font::Font, s: &String)
+    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, height: u16, font: &crate::font::Font, s: &String)
         -> Result<u16, Box<dyn Error>> 
     {
         match self {
             Drawable::Color(c) => {
-                let ret = font.draw_text(&s[..], window, x, y);
+                let ret = font.draw_text(&s[..], window, x, y, height);
                 ret
             }
         }
@@ -188,7 +188,7 @@ impl<T: XConnection> Window<'_, T> {
                        &[self.get_atom(b"_NET_WM_WINDOW_TYPE_DOCK")?])?;
         self.set_atom32(b"_NET_WM_DESKTOP", PropMode::Replace, AtomEnum::CARDINAL, 
                        &[0xFFFFFFFF])?;
-        self.set_atom32(b"_NET_WM_STATE", PropMode::Replace, AtomEnum::ATOM, 
+        self.set_atom32(b"_NET_WM_STATE", PropMode::Append, AtomEnum::ATOM, 
                        &[self.get_atom(b"_NET_WM_STATE_STICKY")?,
                          self.get_atom(b"_NET_WM_STATE_STAYS_ON_TOP")?])?;
         self.set_atom32(b"_NET_WM_ALLOWED_ACTIONS", PropMode::Replace, AtomEnum::ATOM, 
