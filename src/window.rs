@@ -17,7 +17,9 @@ pub struct Window<'a, T: XConnection> {
     pub window: u32,
     pub colormap: u32,
     pub conn: &'a T,
-    pub fontconfig: fontconfig::Fontconfig
+    pub fontconfig: fontconfig::Fontconfig,
+
+    screen: &'a Screen
 }
 
 pub struct Color {
@@ -138,7 +140,7 @@ impl Drawable {
 
 }
 
-
+#[derive(Copy, Clone)]
 pub struct Direction {
     // -1 - left, 0 - center, 1 - right
     pub xdir: i8,
@@ -186,8 +188,8 @@ impl WindowGeometry {
 
     pub fn strut(&self) -> [u32; 12] {
         [
-            if self.dir.xdir == -1 {(self.w as i16 + self.xoff) as u32} else {0},
-            if self.dir.xdir ==  1 {(self.w as i16 + self.xoff) as u32} else {0},
+            0,
+            0,
             if self.dir.ydir == -1 {(self.h as i16 + self.yoff) as u32} else {0},
             if self.dir.ydir ==  1 {(self.h as i16 + self.xoff) as u32} else {0},
             0,0,0,0,0,0,0,0
@@ -196,7 +198,7 @@ impl WindowGeometry {
 }
 
 impl<T: XConnection> Window<'_, T> {
-    pub fn new<'a>(conn: &'a T, screen: &Screen, geom: WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
+    pub fn new<'a>(conn: &'a T, screen: &'a Screen, geom: WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
                 
         let window = conn.generate_id()?;
 
@@ -222,16 +224,16 @@ impl<T: XConnection> Window<'_, T> {
 
         let fontconfig = fontconfig::Fontconfig::new().unwrap();
 
-        let wnd = Window {window, colormap, conn, fontconfig};
+        let wnd = Window {window, colormap, conn, fontconfig, screen};
 
-        wnd.configure(screen, geom)?;
+        wnd.configure(geom)?;
 
         Ok(wnd)
     }
 
-    pub fn configure(&self, screen: &Screen, geom: WindowGeometry) -> Result<(), Box<dyn Error>> {
+    pub fn configure(&self, geom: WindowGeometry) -> Result<(), Box<dyn Error>> {
 
-        let (x,y,w,h) = geom.on_screen(screen.width_in_pixels, screen.height_in_pixels);
+        let (x,y,w,h) = geom.on_screen(self.screen.width_in_pixels, self.screen.height_in_pixels);
 
 
         self.set_atom32(b"_NET_WM_WINDOW_TYPE", PropMode::Replace, AtomEnum::ATOM, 

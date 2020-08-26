@@ -140,6 +140,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             widget_cursor += i.width_max as i16;
         }
+
+        self.window.configure(WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: bar.height, dir: bar.alignment.clone()})?;
+
         Ok(())
     }
 }
