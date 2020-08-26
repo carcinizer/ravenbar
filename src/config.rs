@@ -10,7 +10,7 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
     let default_json = json!({
         
         "alignment" : "NE",
-        "height" : 20,
+        "height" : 70,
 
         "defaults" : {
             "background": "#222233",

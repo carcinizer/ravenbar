@@ -62,9 +62,10 @@ impl Drawable {
     fn image(&self, _x: i16, _y: i16, width: u16, height: u16, _maxheight: u16) -> Vec<u8> {
         match self {
             Self::Color(c) => {
-                let mut v = Vec::with_capacity((width * height * 4) as _);
+                let size = width as usize * height as usize;
+                let mut v = Vec::with_capacity(size * 4);
 
-                for _ in 0..(width * height) {
+                for _ in 0..size {
                     v.extend(&[c.b, c.r, c.g, c.a]);
                 }
                 v
@@ -131,7 +132,7 @@ impl Drawable {
 
                 self.draw_image(window, x, fgy, width, fgheight, &bg)?;
                 background.draw_bg(window, x, y, width, (fgy - y) as _)?;
-                background.draw_bg(window, x, fgy+fgheight as i16, width, (fgy - y) as _)?;
+                background.draw_bg(window, x, fgy+fgheight as i16, width, (height - fgy as u16 - fgheight) as _)?;
 
                 Ok(width)
             }
