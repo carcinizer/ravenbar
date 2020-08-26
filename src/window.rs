@@ -75,7 +75,7 @@ impl Drawable {
         Ok(())
     }
 
-    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, font: &crate::font::Font, s: String)
+    pub fn draw_text<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, font: &crate::font::Font, s: &String)
         -> Result<u16, Box<dyn Error>> 
     {
         match self {

@@ -6,6 +6,7 @@ use crate::font::Font;
 use std::collections::HashMap;
 use x11rb::protocol::xproto::Rectangle;
 
+
 #[derive(PartialEq, Eq, Debug, Hash)]
 pub enum Event {
     Default,
@@ -31,6 +32,10 @@ impl Command {
     fn from(s: &String) -> Self {
         Command::Shell(s.to_owned())
     }
+
+    fn execute(&self) -> String {
+        "todo".to_string()
+    }
 }
 
 struct WidgetProps {
@@ -40,7 +45,10 @@ struct WidgetProps {
 }
 
 struct Widget {
-    props : HashMap<Event, WidgetProps>
+    props : HashMap<Event, WidgetProps>,
+
+    width_min: u16,
+    width_max: u16
 }
 
 struct BarProps {
@@ -83,7 +91,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                                             .as_ref().unwrap_or(&"".to_owned()).to_owned())
                         }
                 )).collect();
-                Widget {props}
+                Widget {props, width_min: 0, width_max: 0}
             }).collect();
 
         let font = Font::new("noto sans", props[&Event::Default].height, &window.fontconfig).unwrap(); // TODO - font from file
@@ -94,11 +102,20 @@ impl<'a, T: XConnection> Bar<'a, T> {
     pub fn refresh(&mut self, event: Event) -> Result<(), Box<dyn std::error::Error>> {
         
         let mut widget_cursor = 0;
-        for i in self.widgets.iter() {
+        for i in self.widgets.iter_mut() {
+
             let props = &i.props[&event];
 
-            let traverse = props.foreground.draw_text(self.window, widget_cursor, 0, &self.font , "yxde".to_string())?;
-            widget_cursor += traverse as i16;
+            let text = props.command.execute();
+            let width = props.foreground.draw_text(self.window, widget_cursor, 0, &self.font, &text)?;
+            let avg_char_width: u16 = width as u16 / text.len() as u16;
+
+            if width > i.width_max || width < i.width_min {
+                i.width_min = width - avg_char_width * 2;
+                i.width_max = width + avg_char_width * 2;
+            }
+
+            widget_cursor += i.width_max as i16;
         }
         Ok(())
     }
