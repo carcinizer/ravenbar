@@ -40,7 +40,10 @@ impl Command {
                 if code != 0 {
                     eprintln!("WARNING: '{}' returned {}", s, code);
                 }
-                if output != "" {
+                if error.chars()
+                         .filter(|x| !x.is_control())
+                         .collect::<String>() != String::new() {
+                    
                     eprintln!("WARNING: '{}' wrote to stderr:", s);
                     eprintln!("{}", error);
                 }

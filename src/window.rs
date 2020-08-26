@@ -201,8 +201,6 @@ impl<T: XConnection> Window<'_, T> {
         self.set_atom32(b"_NET_WM_STRUT_PARTIAL", PropMode::Replace, AtomEnum::CARDINAL, 
                        &geom.strut())?;
 
-        std::thread::sleep_ms(1000);
-
         self.conn.map_window(self.window)?;
 
         // Ensure window's position
