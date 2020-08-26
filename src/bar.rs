@@ -136,6 +136,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 i.width_max = width + avg_char_width * 2;
             }
 
+            props.background.draw_bg(self.window, widget_cursor + width as i16, 0, widget_cursor as u16 + i.width_max, bar.height)?;
+
             widget_cursor += i.width_max as i16;
         }
         Ok(())
