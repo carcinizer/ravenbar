@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         let event = conn.wait_for_event()?;
         
-        b.refresh(bar::Event::Default)?;
+        b.refresh(vec!(bar::Event::Default))?;
 
         match event {
             _ => {}

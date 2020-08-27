@@ -106,13 +106,15 @@ impl BarConfig {
                                 .unwrap()) 
                         ).collect();
         
+        // REWORK
+
         // Mix each event prop with default event prop
-        let default_prop = props.entry("default".to_owned()).or_default().clone();
+        //let default_prop = props.entry("default".to_owned()).or_default().clone();
 
-        for i in props.values_mut() {
-            i.mix(&default_prop);
-        }
-
+        //for i in props.values_mut() {
+        //    i.mix(&default_prop);
+        //}
+        
         let mut widgets: Vec<BarConfigWidget> = widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
@@ -130,11 +132,11 @@ impl BarConfig {
                             }
 
                             // Mix again, this time with default event prop
-                            let default_prop = widget.props.entry("default".to_owned())
-                                                           .or_default().clone();
-                            for p in widget.props.values_mut() {
-                                p.mix(&default_prop);
-                            }
+                            //let default_prop = widget.props.entry("default".to_owned())
+                            //                               .or_default().clone();
+                            //for p in widget.props.values_mut() {
+                            //    p.mix(&default_prop);
+                            //}
                             
                             widget
                         }).collect();
