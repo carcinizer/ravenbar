@@ -5,30 +5,55 @@ use crate::font::Font;
 
 use std::collections::HashMap;
 use x11rb::protocol::Event as XEvent;
+use std::time::{Instant, Duration};
 
-#[derive(PartialEq, Eq, Debug, Hash)]
+#[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
 pub enum Event {
     Default,
-    OnHover
+    OnHover,
+    ButtonPressAny,
+    ButtonReleaseAny
 }
-
-
 
 impl From<&String> for Event {
     fn from(s: &String) -> Self { // TODO Errors
         match &s[..] {
             "default" => Self::Default,
             "on_hover" => Self::OnHover,
+            "on_press" => Self::ButtonPressAny,
+            "on_release" => Self::ButtonReleaseAny,
             _ => {panic!("Invalid event {}", s)}
         }
     }
 }
-impl From<Option<XEvent>> for Event {
-    fn from(ev_opt: Option<XEvent>) -> Self {
-        match ev_opt {
-            Some(ev) => Self::Default,
-            None => Self::Default
-        } 
+
+
+impl Event {
+    pub fn events_from(ev: XEvent) -> Vec<Self> {
+        match ev {
+            XEvent::Expose(_) => vec![Self::Default],
+            XEvent::ButtonPress(_) => vec![Self::ButtonPressAny],
+            XEvent::ButtonRelease(_) => vec![Self::ButtonReleaseAny],
+            _ => { eprintln!("Unknown event: {:?}, reverting to default", ev); vec![Self::Default]}
+        }
+    }
+
+    pub fn precedence(&self) -> u32 {
+        match self {
+            Self::OnHover => 1,
+            Self::ButtonPressAny => 10,
+            Self::ButtonReleaseAny => 10,
+            Self::Default => 1000
+        }
+    }
+
+    pub fn mouse_dependent(&self) -> bool {
+        match self {
+            Self::OnHover => true,
+            Self::ButtonPressAny => true,
+            Self::ButtonReleaseAny => true,
+            _ => false
+        }
     }
 }
 
@@ -76,6 +101,15 @@ impl<T> Prop<T> {
         }
         panic!("Somewhere something doesn't have any events!");
     }
+
+    fn get_event<'a>(&self, events: &Vec<Event>) -> Event {
+        for i in events.iter() {
+            if let Some(_) = self.map.get(i) {
+                return i.clone();
+            }
+        }
+        panic!("Somewhere something doesn't have any events!");
+    }
 }
 
 
@@ -97,14 +131,20 @@ struct WidgetProps {
     foreground: Prop<Drawable>,
     background: Prop<Drawable>,
     command: Prop<Command>,
-    border_factor: Prop<f32>
+    border_factor: Prop<f32>,
+    interval: Prop<f32>
 }
 
 struct Widget {
     props : WidgetProps,
 
+
     width_min: u16,
-    width_max: u16
+    width_max: u16,
+    last_time_updated: Instant,
+    last_event_updated: Event,
+    last_x: i16,
+    cmd_out: String
 }
 
 struct BarProps {
@@ -115,17 +155,20 @@ struct BarProps {
 pub struct Bar<'a, T: XConnection> {
     widgets: Vec<Widget>,
     props: BarProps,
+
+    geometry: WindowGeometry,
     window: &'a Window<'a, T>,
     font: Font<'a>
 }
 
 impl<'a, T: XConnection> Bar<'a, T> {
 
-    pub fn create(cfg: config::BarConfig, window: &'a Window<'a, T>) -> Self {
+    pub fn create(cfg: config::BarConfig, window: &'a Window<'a, T>) -> Result<Self, Box<dyn std::error::Error>> {
 
         let props = BarProps{
             alignment: prop!(cfg.props, alignment, Direction, Direction::from("NW".to_owned())), 
-            height: prop!(cfg.props, height, u16, 25)};
+            height: prop!(cfg.props, height, u16, 25),
+        };
 
         let widgets = cfg.widgets.iter()
             .map( |widget| Widget {
@@ -134,27 +177,48 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     background: prop!(widget.props, background, Drawable, Drawable::from("#222233".to_owned())),
                     command: prop!(widget.props, command, Command, Command::None),
                     border_factor: prop!(widget.props, border_factor, f32, 0.9),
+                    interval: prop!(widget.props, interval, f32, 5.0),
                 },
-                width_min: 0, width_max:0
+                width_min: 0, width_max:0,
+                last_time_updated: Instant::now(),
+                last_event_updated: Event::Default,
+                last_x: 0, 
+                cmd_out: String::new(),
             }).collect();
 
         let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
 
-        Self {props, widgets, window, font}
+        let mut bar = Self {props, widgets, window, font, geometry: WindowGeometry::new()};
+        bar.refresh(vec![Event::Default], true, 0, 0)?;
+        Ok(bar)
     }
 
-    pub fn refresh(&mut self, events: Vec<Event>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) -> Result<(), Box<dyn std::error::Error>> {
         
         let mut widget_cursor = 0;
         let bar = &self.props;
         let e = &events;
-
+    
+        
         for i in self.widgets.iter_mut() {
 
             let props = &i.props;
 
-            let text = props.command.get(e).execute()?;
+            // Determine if mouse is inside widget
+            let m = self.geometry
+                .cropped(widget_cursor, 0, i.width_max, *bar.height.get(e))
+                .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
+            // Update widget text
+            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e) * 1000.0) as u128
+                     || i.last_event_updated != props.command.get_event(e) {
+                     
+                i.cmd_out = props.command.get(e).execute()?;
+                i.last_time_updated = Instant::now();
+                i.last_event_updated = props.command.get_event(e);
+            }
+            
+            // Redraw
             let width = props.foreground.get(e).draw_fg(
                 self.window, 
                 widget_cursor,
@@ -163,9 +227,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 *props.border_factor.get(e), 
                 &self.font, 
                 &props.background.get(e), 
-                &text)?;
+                &i.cmd_out)?;
 
-            let avg_char_width: u16 = width as u16 / text.len() as u16;
+            let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
 
             if width > i.width_max || width < i.width_min {
                 i.width_min = width - avg_char_width * 2;
@@ -173,7 +237,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             }
 
             props.background.get(e).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, *bar.height.get(e))?;
-
+            
             widget_cursor += i.width_max as i16;
         }
 

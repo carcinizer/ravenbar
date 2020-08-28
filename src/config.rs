@@ -48,7 +48,8 @@ pub struct BarConfigWidgetProps {
     pub background: Option<String>,
     pub foreground: Option<String>,
     pub command: Option<String>,
-    pub border_factor: Option<f32>
+    pub border_factor: Option<f32>,
+    pub interval: Option<f32>
 }
 
 #[derive(Debug)]
@@ -198,7 +199,8 @@ impl BarConfigWidgetProps {
             background: None,
             foreground: None,
             command: None,
-            border_factor: None
+            border_factor: None,
+            interval: None
         }
     }
 

@@ -151,16 +151,18 @@ pub struct Direction {
 
 impl Direction {
     pub fn from(s: String) -> Self {
-        let xdir = match &s[0..1] {
+        let ydir = match &s[0..1] {
             "N" => -1,
             "S" => 1,
             _ => {panic!("{} is not a valid direction", s);}
         };
-        let ydir = match &s[1..2] {
-            "W" => -1,
-            "E" => 1,
-            _ => {panic!("{} is not a valid direction", s);}
-        };
+        let xdir = if s.len() == 2 {
+            match &s[1..2] {
+                "W" => -1,
+                "E" => 1,
+                _ => {panic!("{} is not a valid direction", s);}
+            }
+        } else {0};
         Self {xdir, ydir}
     }
 }
@@ -174,6 +176,10 @@ pub struct WindowGeometry {
 }
 
 impl WindowGeometry {
+    pub fn new() -> Self {
+        Self {dir: Direction::from("N".to_owned()), xoff:0,yoff:0,w:0,h:0}
+    }
+
     pub fn on_screen(&self, scrw: u16, scrh: u16) -> (i16, i16, u16, u16) {
 
         let xoff = if self.dir.xdir == 0 {self.xoff} else {self.xoff.abs() * -self.dir.xdir as i16};
@@ -185,6 +191,18 @@ impl WindowGeometry {
         let height = self.h;
         
         (x,y,width,height)
+    }
+
+    pub fn cropped(&self, x: i16, y: i16, w: u16, h: u16) -> Self {
+        let xoff = if self.dir.xdir == 0 {self.xoff + x} else {self.xoff.abs() + x.abs() };
+        let yoff = if self.dir.ydir == 0 {self.yoff + y} else {self.yoff.abs() + y.abs() };
+
+        Self {dir: self.dir, xoff, yoff, w, h}
+    }
+
+    pub fn has_point(&self, px: i16, py: i16, scrw: u16, scrh: u16) -> bool {
+        let (x,y,w,h) = self.on_screen(scrw, scrh);
+        px >= x && py >= y && px <= x + w as i16 && py <= y + h as i16
     }
 
     pub fn strut(&self) -> [u32; 12] {
@@ -211,10 +229,8 @@ impl<T: XConnection> Window<'_, T> {
                            x,y,w,h, 0, WindowClass::InputOutput, 0,
                            &CreateWindowAux::new()
                                 .background_pixel(Color::new(255,100,200,150).as_xcolor())
-                                .event_mask(EventMask::Exposure
-                                          | EventMask::ButtonPress
-                                          | EventMask::ButtonRelease
-                                          | EventMask::PointerMotion))?;
+                                .event_mask(EventMask::ButtonPress
+                                          | EventMask::ButtonRelease))?;
 
 
         let colormap = screen.default_colormap;
@@ -279,6 +295,19 @@ impl<T: XConnection> Window<'_, T> {
         
         self.conn.change_property32(mode, self.window, atom, atype, data)?;
         Ok(())
+    }
+
+    pub fn screen_width(&self) -> u16 {
+        self.screen.width_in_pixels
+    }
+
+    pub fn screen_height(&self) -> u16 {
+        self.screen.height_in_pixels
+    }
+
+    pub fn get_pointer(&self) -> Result<(i16, i16), Box<dyn Error>> {
+        let pointer = self.conn.query_pointer(self.window)?.reply()?;
+        Ok((pointer.root_x, pointer.root_y))
     }
 
     pub fn flush(&self) -> Result<(), ConnectionError> {
