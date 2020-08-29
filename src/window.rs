@@ -70,10 +70,10 @@ impl DrawFGInfo {
     
     pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
        
-        let fgheight = font.height((height as f32 * border_factor).ceil() as _);
+        let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height - fgheight) / 2) as i16;
         
-        let (_, width) = font.glyphs_and_width(text, fgheight);
+        let (glyphs, width) = font.glyphs_and_width(text, height);
         
         DrawFGInfo {x,y,width,height, fgy,fgheight}
     }
@@ -151,7 +151,7 @@ impl Drawable {
                 let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
                 let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
                 
-                let glyphs = font.glyphs(text, i.height);
+                let (glyphs, width) = font.glyphs_and_width(text, i.height);
 
                 font.draw_text(i.width, &glyphs, &fg, &mut bg)?;
 

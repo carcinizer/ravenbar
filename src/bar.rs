@@ -147,7 +147,8 @@ struct Widget {
     last_x: i16,
     cmd_out: String,
     drawinfo: DrawFGInfo,
-    mouse_over: bool
+    mouse_over: bool,
+    needs_redraw: bool
 }
 
 struct BarProps {
@@ -188,7 +189,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 last_x: 0, 
                 cmd_out: String::new(),
                 drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
-                mouse_over: false
+                mouse_over: false,
+                needs_redraw: false
             }).collect();
 
         let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
@@ -217,12 +219,13 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
             // Update widget text
-            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
+            if true || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
                      || i.last_event_updated != props.command.get_event(e,m) {
                      
                 i.cmd_out = props.command.get(e,m).execute()?;
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = props.command.get_event(e,m);
+                i.needs_redraw = true;
 
                 i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
 
@@ -252,7 +255,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             let m = i.mouse_over;
             
             // Redraw
-            if widget_cursor != i.last_x { 
+            if i.needs_redraw || widget_cursor != i.last_x { 
                 let foreground = props.foreground.get(e,m);
                 let width = i.drawinfo.width;
 
@@ -261,9 +264,11 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 props.background.get(e,m).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, height)?;
             }
             i.last_x = widget_cursor; 
+            i.needs_redraw = false;
             widget_cursor += i.width_max as i16;
         }
-
+        
+        self.window.flush()?;
 
         Ok(())
     }
