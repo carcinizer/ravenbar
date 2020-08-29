@@ -220,16 +220,11 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 i.last_event_updated = props.command.get_event(e,m);
             }
             
+            let foreground = props.foreground.get(e,m);
+            let drawinfo = Drawable::info_fg(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
+
             // Redraw
-            let width = props.foreground.get(e,m).draw_fg(
-                self.window, 
-                widget_cursor,
-                0, 
-                height,
-                *props.border_factor.get(e,m), 
-                &self.font, 
-                &props.background.get(e,m), 
-                &i.cmd_out)?;
+            let width = foreground.draw_fg(self.window, drawinfo, &props.background.get(e,m))?;
 
             let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
 

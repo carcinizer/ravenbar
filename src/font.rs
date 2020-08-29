@@ -53,7 +53,7 @@ impl Font<'_> {
         (glyphs, width)
     }
 
-    pub fn draw_text(&self, width: u16, glyphs: Vec<PositionedGlyph>, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+    pub fn draw_text(&self, width: u16, glyphs: &Vec<PositionedGlyph>, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
 
         for g in glyphs {
             if let Some(bb) = g.pixel_bounding_box() {
