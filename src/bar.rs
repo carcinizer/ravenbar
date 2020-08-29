@@ -209,6 +209,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let bm = self.geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
         let height = *bar.height.get(e,bm);
         
+
         for i in self.widgets.iter_mut() {
 
             let props = &i.props;
@@ -219,23 +220,25 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
             // Update widget text
-            if true || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
+            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
                      || i.last_event_updated != props.command.get_event(e,m) {
                      
                 i.cmd_out = props.command.get(e,m).execute()?;
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = props.command.get_event(e,m);
                 i.needs_redraw = true;
-
-                i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
-
-                let width = i.drawinfo.width;
-                let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
-                if width > i.width_max || width < i.width_min {
-                    i.width_min = width - avg_char_width * 2;
-                    i.width_max = width + avg_char_width * 2;
-                }
+                
             }
+
+            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
+
+            let width = i.drawinfo.width;
+            let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
+            if width > i.width_max || width < i.width_min {
+                i.width_min = width - avg_char_width * 2;
+                i.width_max = width + avg_char_width * 2;
+            }
+            
             i.mouse_over = m;
             widget_cursor += i.width_max as i16;
         }
@@ -247,7 +250,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
             self.window.configure(&self.geometry)?;
         }
 
-        widget_cursor = 0;
 
         for i in self.widgets.iter_mut() {
 
@@ -255,17 +257,16 @@ impl<'a, T: XConnection> Bar<'a, T> {
             let m = i.mouse_over;
             
             // Redraw
-            if i.needs_redraw || widget_cursor != i.last_x { 
+            if i.needs_redraw || i.drawinfo.x != i.last_x { 
                 let foreground = props.foreground.get(e,m);
                 let width = i.drawinfo.width;
 
                 foreground.draw_fg(self.window, &i.drawinfo, &self.font, &props.background.get(e,m), &i.cmd_out)?;
 
-                props.background.get(e,m).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, height)?;
+                props.background.get(e,m).draw_bg(self.window, i.drawinfo.x + width as i16, 0, i.width_max - width, height)?;
             }
             i.last_x = widget_cursor; 
             i.needs_redraw = false;
-            widget_cursor += i.width_max as i16;
         }
         
         self.window.flush()?;
