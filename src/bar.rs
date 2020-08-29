@@ -40,9 +40,9 @@ impl Event {
 
     pub fn precedence(&self) -> u32 {
         match self {
-            Self::OnHover => 1,
-            Self::ButtonPressAny => 10,
-            Self::ButtonReleaseAny => 10,
+            Self::ButtonPressAny => 1,
+            Self::ButtonReleaseAny => 1,
+            Self::OnHover => 10,
             Self::Default => 1000
         }
     }
