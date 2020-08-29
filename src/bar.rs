@@ -6,6 +6,7 @@ use crate::font::Font;
 use std::collections::HashMap;
 use x11rb::protocol::Event as XEvent;
 use std::time::{Instant, Duration};
+use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
 pub enum Event {
@@ -144,7 +145,9 @@ struct Widget {
     last_time_updated: Instant,
     last_event_updated: Event,
     last_x: i16,
-    cmd_out: String
+    cmd_out: String,
+    drawinfo: DrawFGInfo,
+    mouse_over: bool
 }
 
 struct BarProps {
@@ -184,6 +187,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 last_event_updated: Event::Default,
                 last_x: 0, 
                 cmd_out: String::new(),
+                drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
+                mouse_over: false
             }).collect();
 
         let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
@@ -201,7 +206,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
     
         let bm = self.geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
         let height = *bar.height.get(e,bm);
-
+        
         for i in self.widgets.iter_mut() {
 
             let props = &i.props;
@@ -218,23 +223,17 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 i.cmd_out = props.command.get(e,m).execute()?;
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = props.command.get_event(e,m);
+
+                i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
+
+                let width = i.drawinfo.width;
+                let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
+                if width > i.width_max || width < i.width_min {
+                    i.width_min = width - avg_char_width * 2;
+                    i.width_max = width + avg_char_width * 2;
+                }
             }
-            
-            let foreground = props.foreground.get(e,m);
-            let drawinfo = Drawable::info_fg(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
-
-            // Redraw
-            let width = foreground.draw_fg(self.window, drawinfo, &props.background.get(e,m))?;
-
-            let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
-
-            if width > i.width_max || width < i.width_min {
-                i.width_min = width - avg_char_width * 2;
-                i.width_max = width + avg_char_width * 2;
-            }
-
-            props.background.get(e,m).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, height)?;
-            
+            i.mouse_over = m;
             widget_cursor += i.width_max as i16;
         }
         
@@ -243,6 +242,26 @@ impl<'a, T: XConnection> Bar<'a, T> {
         if next_geom != self.geometry {
             self.geometry = next_geom;
             self.window.configure(&self.geometry)?;
+        }
+
+        widget_cursor = 0;
+
+        for i in self.widgets.iter_mut() {
+
+            let props = &i.props;
+            let m = i.mouse_over;
+            
+            // Redraw
+            if widget_cursor != i.last_x { 
+                let foreground = props.foreground.get(e,m);
+                let width = i.drawinfo.width;
+
+                foreground.draw_fg(self.window, &i.drawinfo, &self.font, &props.background.get(e,m), &i.cmd_out)?;
+
+                props.background.get(e,m).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, height)?;
+            }
+            i.last_x = widget_cursor; 
+            widget_cursor += i.width_max as i16;
         }
 
 

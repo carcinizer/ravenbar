@@ -1,12 +1,15 @@
 
 use std::error::Error;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
 use x11rb::errors::ConnectionError;
 use x11rb::connection::Connection;
 use x11rb::wrapper::ConnectionExt;
+
+use crate::font::Font;
 
 // Just an alias for convenience
 pub trait XConnection: Connection + ConnectionExt {}
@@ -54,15 +57,26 @@ pub enum Drawable {
     Color(Color)
 }
 
-pub struct DrawFGInfo<'a> {
+pub struct DrawFGInfo {
     pub x: i16,
     pub y: i16,
     pub width: u16,
     pub height: u16,
     pub fgy: i16,
     pub fgheight: u16,
-    pub glyphs: Vec<rusttype::PositionedGlyph<'a>>,
-    pub font: &'a crate::font::Font<'a>
+}
+
+impl DrawFGInfo {
+    
+    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
+       
+        let fgheight = font.height((height as f32 * border_factor).ceil() as _);
+        let fgy = y + ((height - fgheight) / 2) as i16;
+        
+        let (_, width) = font.glyphs_and_width(text, fgheight);
+        
+        DrawFGInfo {x,y,width,height, fgy,fgheight}
+    }
 }
 
 
@@ -126,17 +140,8 @@ impl Drawable {
         Ok(())
     }
     
-    pub fn info_fg<'a>(x: i16, y: i16, height: u16, border_factor: f32, font: &'a crate::font::Font<'a>, text: &String) -> DrawFGInfo<'a> {
-       
-        let fgheight = font.height((height as f32 * border_factor).ceil() as _);
-        let fgy = y + ((height - fgheight) / 2) as i16;
-        
-        let (glyphs, width) = font.glyphs_and_width(text, fgheight);
-        
-        DrawFGInfo {x,y,width,height, fgy,fgheight, glyphs, font}
-    }
 
-    pub fn draw_fg<T: XConnection>(&self, window: &Window<T>, info: DrawFGInfo, background: &Drawable) -> Result<u16, Box<dyn Error>> 
+    pub fn draw_fg<T: XConnection>(&self, window: &Window<T>, info: &DrawFGInfo, font: &Font, background: &Drawable, text: &String) -> Result<(),Box<dyn Error>> 
     {
         let i = info;
 
@@ -145,14 +150,16 @@ impl Drawable {
 
                 let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
                 let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
+                
+                let glyphs = font.glyphs(text, i.height);
 
-                i.font.draw_text(i.width, &i.glyphs, &fg, &mut bg)?;
+                font.draw_text(i.width, &glyphs, &fg, &mut bg)?;
 
                 self.draw_image(window, i.x, i.fgy, i.width, i.fgheight, &bg)?;
                 background.draw_bg(window, i.x, i.y, i.width, (i.fgy - i.y) as _)?;
                 background.draw_bg(window, i.x, i.fgy+i.fgheight as i16, i.width, (i.height - i.fgy as u16 - i.fgheight) as _)?;
 
-                Ok(i.width)
+                Ok(())
             }
         }
     }

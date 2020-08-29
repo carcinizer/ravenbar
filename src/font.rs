@@ -33,7 +33,7 @@ impl Font<'_> {
         self.font.v_metrics(scale(height)).ascent
     }
 
-    fn glyphs(&self, text: &String, height: u16) -> Vec<PositionedGlyph> {
+    pub fn glyphs(&self, text: &String, height: u16) -> Vec<PositionedGlyph> {
         self.font.layout(&text[..], scale(height), point(0.0, self.ascent(height)) ).collect::<Vec<_>>()
     }
 
@@ -46,7 +46,7 @@ impl Font<'_> {
             .unwrap_or(0.0).ceil() as _
     }
 
-    pub fn glyphs_and_width(&self, text: &String, height: u16) -> (Vec<PositionedGlyph>, u16) {
+    pub fn glyphs_and_width(&self, text: &String, height: u16) -> (Vec<PositionedGlyph<'_>>, u16) {
         let text_nfc = text.nfc().filter(|x| !x.is_control()).collect();
         let glyphs = self.glyphs(&text_nfc, height);
         let width = self.calc_width(&glyphs);
