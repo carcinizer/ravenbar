@@ -93,8 +93,8 @@ struct Prop<T> {
 }
 
 impl<T> Prop<T> {
-    fn get(&self, events: &Vec<Event>) -> &T {
-        for i in events.iter() {
+    fn get(&self, events: &Vec<Event>, mouse_inside: bool) -> &T {
+        for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
             if let Some(x) = self.map.get(i) {
                 return x;
             }
@@ -102,8 +102,8 @@ impl<T> Prop<T> {
         panic!("Somewhere something doesn't have any events!");
     }
 
-    fn get_event<'a>(&self, events: &Vec<Event>) -> Event {
-        for i in events.iter() {
+    fn get_event<'a>(&self, events: &Vec<Event>, mouse_inside: bool) -> Event {
+        for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
             if let Some(_) = self.map.get(i) {
                 return i.clone();
             }
@@ -199,34 +199,36 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let bar = &self.props;
         let e = &events;
     
-        
+        let bm = self.geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
+        let height = *bar.height.get(e,bm);
+
         for i in self.widgets.iter_mut() {
 
             let props = &i.props;
 
             // Determine if mouse is inside widget
             let m = self.geometry
-                .cropped(widget_cursor, 0, i.width_max, *bar.height.get(e))
+                .cropped(widget_cursor, 0, i.width_max, height)
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
             // Update widget text
-            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e) * 1000.0) as u128
-                     || i.last_event_updated != props.command.get_event(e) {
+            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
+                     || i.last_event_updated != props.command.get_event(e,m) {
                      
-                i.cmd_out = props.command.get(e).execute()?;
+                i.cmd_out = props.command.get(e,m).execute()?;
                 i.last_time_updated = Instant::now();
-                i.last_event_updated = props.command.get_event(e);
+                i.last_event_updated = props.command.get_event(e,m);
             }
             
             // Redraw
-            let width = props.foreground.get(e).draw_fg(
+            let width = props.foreground.get(e,m).draw_fg(
                 self.window, 
                 widget_cursor,
                 0, 
-                *bar.height.get(e), 
-                *props.border_factor.get(e), 
+                height,
+                *props.border_factor.get(e,m), 
                 &self.font, 
-                &props.background.get(e), 
+                &props.background.get(e,m), 
                 &i.cmd_out)?;
 
             let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
@@ -236,12 +238,18 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 i.width_max = width + avg_char_width * 2;
             }
 
-            props.background.get(e).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, *bar.height.get(e))?;
+            props.background.get(e,m).draw_bg(self.window, widget_cursor + width as i16, 0, i.width_max - width, height)?;
             
             widget_cursor += i.width_max as i16;
         }
+        
+        let next_geom = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.get(e,bm).clone()};
+        
+        if next_geom != self.geometry {
+            self.geometry = next_geom;
+            self.window.configure(&self.geometry)?;
+        }
 
-        self.window.configure(WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: *bar.height.get(e), dir: bar.alignment.get(e).clone()})?;
 
         Ok(())
     }

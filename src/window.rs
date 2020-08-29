@@ -141,7 +141,7 @@ impl Drawable {
 
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Direction {
     // -1 - left, 0 - center, 1 - right
     pub xdir: i8,
@@ -167,6 +167,7 @@ impl Direction {
     }
 }
 
+#[derive(PartialEq)]
 pub struct WindowGeometry {
     pub dir: Direction,
     pub xoff: i16,
@@ -194,8 +195,18 @@ impl WindowGeometry {
     }
 
     pub fn cropped(&self, x: i16, y: i16, w: u16, h: u16) -> Self {
-        let xoff = if self.dir.xdir == 0 {self.xoff + x} else {self.xoff.abs() + x.abs() };
-        let yoff = if self.dir.ydir == 0 {self.yoff + y} else {self.yoff.abs() + y.abs() };
+        let xoff = match self.dir.xdir {
+            0  => self.xoff + x,
+            -1 => self.xoff.abs() + x,
+            1  => self.xoff.abs() - x + self.w as i16 - w as i16,
+            _  => panic!("You weren't supposed to see this error")
+        };
+        let yoff = match self.dir.ydir {
+            0  => self.yoff + y,
+            -1 => self.yoff.abs() + y,
+            1  => self.yoff.abs() - y + self.h as i16 - h as i16,
+            _  => panic!("You weren't supposed to see this error")
+        };
 
         Self {dir: self.dir, xoff, yoff, w, h}
     }
@@ -217,7 +228,7 @@ impl WindowGeometry {
 }
 
 impl<T: XConnection> Window<'_, T> {
-    pub fn new<'a>(conn: &'a T, screen: &'a Screen, geom: WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
+    pub fn new<'a>(conn: &'a T, screen: &'a Screen, geom: &WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
                 
         let window = conn.generate_id()?;
 
@@ -248,7 +259,7 @@ impl<T: XConnection> Window<'_, T> {
         Ok(wnd)
     }
 
-    pub fn configure(&self, geom: WindowGeometry) -> Result<(), Box<dyn Error>> {
+    pub fn configure(&self, geom: &WindowGeometry) -> Result<(), Box<dyn Error>> {
 
         let (x,y,w,h) = geom.on_screen(self.screen.width_in_pixels, self.screen.height_in_pixels);
 
