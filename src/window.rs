@@ -264,7 +264,6 @@ impl<T: XConnection> Window<'_, T> {
         conn.create_window(x11rb::COPY_DEPTH_FROM_PARENT, window, screen.root,
                            x,y,w,h, 0, WindowClass::InputOutput, 0,
                            &CreateWindowAux::new()
-                                .background_pixel(Color::new(255,100,200,150).as_xcolor())
                                 .event_mask(EventMask::ButtonPress
                                           | EventMask::ButtonRelease))?;
 
