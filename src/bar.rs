@@ -161,6 +161,7 @@ pub struct Bar<'a, T: XConnection> {
     props: BarProps,
 
     geometry: WindowGeometry,
+    fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
     font: Font<'a>
 }
@@ -195,7 +196,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
         let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
 
-        let mut bar = Self {props, widgets, window, font, geometry: WindowGeometry::new()};
+        let mut bar = Self {props, widgets, window, font, geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new()};
         bar.refresh(vec![Event::Default], true, 0, 0)?;
         Ok(bar)
     }
@@ -206,7 +207,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let bar = &self.props;
         let e = &events;
     
-        let bm = self.geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
+        let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
         let height = *bar.height.get(e,bm);
         
 
@@ -215,7 +216,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             let props = &i.props;
 
             // Determine if mouse is inside widget
-            let m = self.geometry
+            let m = self.fake_geometry
                 .cropped(widget_cursor, 0, i.width_max, height)
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
@@ -223,11 +224,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
             if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
                      || i.last_event_updated != props.command.get_event(e,m) {
                      
-                i.cmd_out = props.command.get(e,m).execute()?;
+                let new_cmd_out = props.command.get(e,m).execute()?;
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = props.command.get_event(e,m);
-                i.needs_redraw = true;
-                
+
+                if new_cmd_out != i.cmd_out {
+                    i.needs_redraw = true;
+                    i.cmd_out = new_cmd_out;
+                }
             }
 
             i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
@@ -244,6 +248,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
         }
         
         let next_geom = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.get(e,bm).clone()};
+        // Fake geometry in order to support non-insane on-hover window events
+        self.fake_geometry = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.get(e,false).clone()};
         
         if next_geom != self.geometry {
             self.geometry = next_geom;
@@ -265,7 +271,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
                 props.background.get(e,m).draw_bg(self.window, i.drawinfo.x + width as i16, 0, i.width_max - width, height)?;
             }
-            i.last_x = widget_cursor; 
+            i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
         
