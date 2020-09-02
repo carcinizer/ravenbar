@@ -1,12 +1,12 @@
 
 use crate::window::*;
+use crate::window::Drawable;
 use crate::config;
 use crate::font::Font;
 
 use std::collections::HashMap;
 use x11rb::protocol::Event as XEvent;
 use std::time::{Instant, Duration};
-use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
 pub enum Event {
@@ -58,6 +58,7 @@ impl Event {
     }
 }
 
+#[derive(PartialEq, Clone)]
 enum Command {
     None,
     Shell(String)
@@ -136,9 +137,19 @@ struct WidgetProps {
     interval: Prop<f32>
 }
 
+#[derive(Clone, PartialEq)]
+struct WidgetPropsCurrent {
+    foreground: Drawable,
+    background: Drawable,
+    command: Command,
+    border_factor: f32,
+    interval: f32
+}
+
 struct Widget {
     props : WidgetProps,
 
+    current: WidgetPropsCurrent,
 
     width_min: u16,
     width_max: u16,
@@ -156,9 +167,17 @@ struct BarProps {
     height: Prop<u16>
 }
 
+#[derive(Clone, PartialEq)]
+struct BarPropsCurrent {
+    alignment: Direction,
+    height: u16
+}
+
 pub struct Bar<'a, T: XConnection> {
     widgets: Vec<Widget>,
     props: BarProps,
+
+    current: BarPropsCurrent,
 
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
@@ -176,27 +195,34 @@ impl<'a, T: XConnection> Bar<'a, T> {
         };
 
         let widgets = cfg.widgets.iter()
-            .map( |widget| Widget {
-                props: WidgetProps {
+            .map( |widget| {
+                let props = WidgetProps {
                     foreground: prop!(widget.props, foreground, Drawable, Drawable::from("#FFFFFF".to_owned())),
                     background: prop!(widget.props, background, Drawable, Drawable::from("#222233".to_owned())),
                     command: prop!(widget.props, command, Command, Command::None),
                     border_factor: prop!(widget.props, border_factor, f32, 0.9),
                     interval: prop!(widget.props, interval, f32, 5.0),
-                },
-                width_min: 0, width_max:0,
-                last_time_updated: Instant::now(),
-                last_event_updated: Event::Default,
-                last_x: 0, 
-                cmd_out: String::new(),
-                drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
-                mouse_over: false,
-                needs_redraw: false
-            }).collect();
+                };
+                let current = props.as_current(&vec![Event::Default], false);
+                Widget {
+                    props,
+                    width_min: 0, width_max:0,
+                    last_time_updated: Instant::now(),
+                    last_event_updated: Event::Default,
+                    last_x: 0, 
+                    cmd_out: String::new(),
+                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
+                    current,
+                    mouse_over: false,
+                    needs_redraw: false
+            }}).collect();
 
         let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
+        let current = props.as_current(&vec![Event::Default], false);
 
-        let mut bar = Self {props, widgets, window, font, geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new()};
+        let mut bar = Self {props, widgets, window, font, 
+            geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
+            current};
         bar.refresh(vec![Event::Default], true, 0, 0)?;
         Ok(bar)
     }
@@ -204,38 +230,57 @@ impl<'a, T: XConnection> Bar<'a, T> {
     pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) -> Result<(), Box<dyn std::error::Error>> {
         
         let mut widget_cursor = 0;
-        let bar = &self.props;
         let e = &events;
-    
-        let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
-        let height = *bar.height.get(e,bm);
         
+        // Determine if mouse is inside bar
+        let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
+        
+        // Get props and determine whether they changed
+        let new_current = self.props.as_current(e,bm);
+        let bar_redraw = if new_current != self.current {
+            self.current = new_current;
+            true
+        }
+        else {false};
+
+        let bar = &self.current;
+        let height = bar.height;
 
         for i in self.widgets.iter_mut() {
-
-            let props = &i.props;
 
             // Determine if mouse is inside widget
             let m = self.fake_geometry
                 .cropped(widget_cursor, 0, i.width_max, height)
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
+            // Get widget props and determine whetherthey changed
+            let new_current = i.props.as_current(e,m);
+            i.needs_redraw = if new_current != i.current {
+                i.current = new_current;
+                true
+            }
+            else {bar_redraw};
+
+            let props = &i.current;
+
             // Update widget text
-            if force || i.last_time_updated.elapsed().as_millis() > (props.interval.get(e,m) * 1000.0) as u128
-                     || i.last_event_updated != props.command.get_event(e,m) {
+            if force || i.last_time_updated.elapsed().as_millis() > (props.interval * 1000.0) as u128
+                     || i.last_event_updated != i.props.command.get_event(e,m) {
                      
-                let new_cmd_out = props.command.get(e,m).execute()?;
+                let new_cmd_out = props.command.execute()?;
                 i.last_time_updated = Instant::now();
-                i.last_event_updated = props.command.get_event(e,m);
+                i.last_event_updated = i.props.command.get_event(e,m);
 
                 if new_cmd_out != i.cmd_out {
                     i.needs_redraw = true;
                     i.cmd_out = new_cmd_out;
                 }
             }
+            
+            // New draw info
+            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &self.font, &i.cmd_out);
 
-            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, *props.border_factor.get(e,m), &self.font, &i.cmd_out);
-
+            // New widget width
             let width = i.drawinfo.width;
             let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
             if width > i.width_max || width < i.width_min {
@@ -247,9 +292,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
             widget_cursor += i.width_max as i16;
         }
         
-        let next_geom = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.get(e,bm).clone()};
+        let next_geom = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.clone()};
         // Fake geometry in order to support non-insane on-hover window events
-        self.fake_geometry = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.get(e,false).clone()};
+        self.fake_geometry = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.clone()};
         
         if next_geom != self.geometry {
             self.geometry = next_geom;
@@ -282,3 +327,22 @@ impl<'a, T: XConnection> Bar<'a, T> {
 }
 
 
+impl WidgetProps {
+    fn as_current(&self, e: &Vec<Event>, m: bool) -> WidgetPropsCurrent {
+        WidgetPropsCurrent {
+            foreground: self.foreground.get(e,m).clone(),
+            background: self.background.get(e,m).clone(),
+            command: self.command.get(e,m).clone(),
+            border_factor: self.border_factor.get(e,m).clone(),
+            interval: self.interval.get(e,m).clone()}
+    }
+}
+
+impl BarProps {
+    fn as_current(&self, e: &Vec<Event>, m: bool) -> BarPropsCurrent {
+        BarPropsCurrent {
+            alignment: self.alignment.get(e,m).clone(),
+            height: self.height.get(e,m).clone()
+        }
+    }
+}

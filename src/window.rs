@@ -25,6 +25,7 @@ pub struct Window<'a, T: XConnection> {
     screen: &'a Screen
 }
 
+#[derive(Copy, Clone, PartialEq)]
 pub struct Color {
     r: u8,
     g: u8,
@@ -52,7 +53,7 @@ impl Color {
     }
 }
 
-
+#[derive(Clone, PartialEq)]
 pub enum Drawable {
     Color(Color)
 }
@@ -73,7 +74,7 @@ impl DrawFGInfo {
         let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height - fgheight) / 2) as i16;
         
-        let (glyphs, width) = font.glyphs_and_width(text, height);
+        let (_, width) = font.glyphs_and_width(text, height);
         
         DrawFGInfo {x,y,width,height, fgy,fgheight}
     }
