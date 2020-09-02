@@ -1,12 +1,22 @@
 
 use std::error::Error;
-use std::fs::File;
+use std::fs::{OpenOptions, File};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde_json::{Value, json, from_reader, from_value, to_writer_pretty, Map};
 
-pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
+extern crate dirs;
+
+pub fn config_dir<'a>() -> std::path::PathBuf {
+    match dirs::config_dir() {
+        Some(x) => x.join("ravenbar"),
+        None => {panic!("Failed to find .config directory!")}
+    }
+}
+
+pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
     let default_json = json!({
         
         "alignment" : "NE",
@@ -22,7 +32,8 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
         "widgets" : [
             {
                 "command": "date +%H:%M",
-                "command.on_hover": "date +%H:%M:%S" // TODO TEST?
+                "command.on_hover": "date +%H:%M:%S", // TODO TEST?
+                "interval.on_hover": 0.2
             },
             {
                 "command": "echo This is a test"
@@ -30,7 +41,11 @@ pub fn write_default_config(file: &str) -> Result<(), Box<dyn Error>> {
         ]
     });
 
-    let cfg = File::create(file)?;
+    let cfg = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(file)?;
+
     to_writer_pretty(cfg, &default_json)?;
     Ok(())
 }
@@ -65,7 +80,7 @@ pub struct BarConfig {
 
 
 impl BarConfig {
-    pub fn new(filename: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn new(filename: PathBuf) -> Result<Self, Box<dyn Error>> {
         let file = File::open(filename)?;
 
         let mut default_widget = BarConfigWidget::new();
