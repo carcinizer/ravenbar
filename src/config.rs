@@ -184,7 +184,7 @@ fn split_key(key: &str) -> (String, String, String) { // TODO Result
     let settings = match words.len() {
         1 => "".to_owned(),
         2 => "".to_owned(),
-        _ => words[2..].join("")
+        _ => words[2..].join(".")
     };
     (prop, event, settings)
 }
