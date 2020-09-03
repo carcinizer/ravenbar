@@ -1,3 +1,4 @@
+
 use std::error::Error;
 
 use x11rb::connection::Connection;
@@ -49,8 +50,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let screen = &conn.setup().roots[screen_num];
 
         let wnd = window::Window::new(&conn, &screen, &window::WindowGeometry{dir: window::Direction{xdir: 0, ydir: -1}, xoff: 0, yoff: 0, w: 500, h: 25})?;
+        
+        let config = config::BarConfig::new(file)?;
+        let signal_ids = config.get_signals();
 
-        let mut b = bar::Bar::create(config::BarConfig::new(file)?, &wnd)?;
+        let mut b = bar::Bar::create(config, &wnd)?;
 
         loop {
             let (x,y) = wnd.get_pointer()?;

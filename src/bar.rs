@@ -13,23 +13,25 @@ pub enum Event {
     Default,
     OnHover,
     ButtonPressAny,
-    ButtonReleaseAny
-}
-
-impl From<&String> for Event {
-    fn from(s: &String) -> Self { // TODO Errors
-        match &s[..] {
-            "default" => Self::Default,
-            "on_hover" => Self::OnHover,
-            "on_press" => Self::ButtonPressAny,
-            "on_release" => Self::ButtonReleaseAny,
-            _ => {panic!("Invalid event {}", s)}
-        }
-    }
+    ButtonPressContAny,
+    ButtonReleaseAny,
+    ButtonReleaseContAny,
 }
 
 
 impl Event {
+    pub fn from(event: &String, settings: &String) -> Self { // TODO Errors
+        match &event[..] {
+            "default" => Self::Default,
+            "on_hover" => Self::OnHover,
+            "on_press" => Self::ButtonPressAny,
+            "on_press_cont" => Self::ButtonPressContAny,
+            "on_release" => Self::ButtonReleaseAny,
+            "on_release_cont" => Self::ButtonReleaseContAny,
+            _ => {panic!("Invalid event {}.{}", event, settings)}
+        }
+    }
+
     pub fn events_from(ev: XEvent) -> Vec<Self> {
         match ev {
             XEvent::Expose(_) => vec![Self::Default],
@@ -41,9 +43,11 @@ impl Event {
 
     pub fn precedence(&self) -> u32 {
         match self {
-            Self::ButtonPressAny => 1,
-            Self::ButtonReleaseAny => 1,
-            Self::OnHover => 10,
+            Self::ButtonPressAny => 101,
+            Self::ButtonReleaseAny => 101,
+            Self::ButtonPressContAny => 102,
+            Self::ButtonReleaseContAny => 102,
+            Self::OnHover => 200,
             Self::Default => 1000
         }
     }
@@ -53,6 +57,8 @@ impl Event {
             Self::OnHover => true,
             Self::ButtonPressAny => true,
             Self::ButtonReleaseAny => true,
+            Self::ButtonPressContAny => true,
+            Self::ButtonReleaseContAny => true,
             _ => false
         }
     }
@@ -119,9 +125,9 @@ macro_rules! prop {
     ($var:expr, $member:ident, $type:ident, $default:expr) => {{
         let mut map = HashMap::new();
         map.insert(Event::Default, $default);
-        for (k,v) in $var.iter() {
+        for ((k,s),v) in $var.iter() {
             if let Some(x) = &v.$member {
-                map.insert(Event::from(k), $type::from(x.clone()));
+                map.insert(Event::from(k, s), $type::from(x.clone()));
             }
         }
         Prop {map}

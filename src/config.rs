@@ -1,12 +1,13 @@
 
 use std::error::Error;
 use std::fs::{OpenOptions, File};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde_json::{Value, json, from_reader, from_value, to_writer_pretty, Map};
 
+use crate::bar::Event;
 extern crate dirs;
 
 pub fn config_dir<'a>() -> std::path::PathBuf {
@@ -20,7 +21,7 @@ pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
     let default_json = json!({
         
         "alignment" : "NE",
-        "height" : 70,
+        "height" : 20,
 
         "defaults" : {
             "background": "#222233",
@@ -69,12 +70,12 @@ pub struct BarConfigWidgetProps {
 
 #[derive(Debug)]
 pub struct BarConfigWidget {
-    pub props: HashMap<String, BarConfigWidgetProps>
+    pub props: HashMap<(String, String), BarConfigWidgetProps>
 }
 
 #[derive(Debug)]
 pub struct BarConfig {
-    pub props: HashMap<String, BarConfigProps>,
+    pub props: HashMap<(String, String), BarConfigProps>,
     pub widgets: Vec<BarConfigWidget>
 }
 
@@ -84,14 +85,14 @@ impl BarConfig {
         let file = File::open(filename)?;
 
         let mut default_widget = BarConfigWidget::new();
-        let mut bar_props_proto = HashMap::<String, Map<String, Value>>::new();
+        let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
         let mut widget_arr = Vec::<Value>::new();
 
         let values : Value = from_reader(file)?;
 
         if let Value::Object(barconfig) = values {
             for (key, val) in barconfig.iter() {
-                let (prop, event) = split_key(key);
+                let (prop, event, settings) = split_key(key);
                 
                 match &*prop {
                     "defaults" => {
@@ -107,7 +108,7 @@ impl BarConfig {
                         else {panic!("'widgets' value must be an array")}
                     }
                     _ => {
-                        bar_props_proto.entry(event).or_default().insert(prop, val.to_owned());
+                        bar_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
                     }
                 }
             }
@@ -115,23 +116,14 @@ impl BarConfig {
         else {panic!("Bar config does not contain a JSON root object")} // TODO Result
         
         // Convert bar props from raw to intermediate form 
-        let mut props : HashMap<String, BarConfigProps> = bar_props_proto
+        let props : HashMap<(String, String), BarConfigProps> = bar_props_proto
                         .iter().map(|(k,v)| 
                             (k.to_owned(), 
                              from_value::<BarConfigProps>(Value::Object(v.to_owned()))
                                 .unwrap()) 
                         ).collect();
-        
-        // REWORK
 
-        // Mix each event prop with default event prop
-        //let default_prop = props.entry("default".to_owned()).or_default().clone();
-
-        //for i in props.values_mut() {
-        //    i.mix(&default_prop);
-        //}
-        
-        let mut widgets: Vec<BarConfigWidget> = widget_arr
+        let widgets: Vec<BarConfigWidget> = widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
                             
@@ -146,19 +138,12 @@ impl BarConfig {
                             for (k, p) in widget.props.iter_mut() {
                                 p.mix(default_widget.props.entry(k.to_owned()).or_default());
                             }
-
-                            // Mix again, this time with default event prop
-                            //let default_prop = widget.props.entry("default".to_owned())
-                            //                               .or_default().clone();
-                            //for p in widget.props.values_mut() {
-                            //    p.mix(&default_prop);
-                            //}
-                            
                             widget
                         }).collect();
 
         Ok(BarConfig {props, widgets})
     }
+
 }
 
 impl BarConfigWidget {
@@ -168,13 +153,13 @@ impl BarConfigWidget {
 
     fn create(obj: &Value) -> Result<Self, serde_json::Error> {
 
-        let mut widget_props_proto: HashMap<String, Map<String, Value>> = HashMap::new();
+        let mut widget_props_proto: HashMap<(String, String), Map<String, Value>> = HashMap::new();
 
         if let Value::Object(values) = obj {
             for (key, val) in values {
-                let (prop, event) = split_key(key);
+                let (prop, event, settings) = split_key(key);
                 
-                widget_props_proto.entry(event).or_default().insert(prop, val.to_owned());
+                widget_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
             }
 
             Ok(Self { 
@@ -188,16 +173,20 @@ impl BarConfigWidget {
 }
 
 
-fn split_key(key: &str) -> (String, String) { // TODO Result
+fn split_key(key: &str) -> (String, String, String) { // TODO Result
     let words: Vec<&str> = key.split('.').collect();
 
     let prop = words[0].to_owned();
     let event = match words.len() {
         1 => "default".to_owned(),
-        2 => words[1].to_owned(),
-        _ => {panic!("Key {} has more than 1 dot, which is not allowed", key);}
+        _ => words[1].to_owned()
     };
-    (prop, event)
+    let settings = match words.len() {
+        1 => "".to_owned(),
+        2 => "".to_owned(),
+        _ => words[2..].join("")
+    };
+    (prop, event, settings)
 }
 
 
