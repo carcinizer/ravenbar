@@ -78,13 +78,17 @@ impl Command {
     fn execute(&self) -> Result<String, run_script::ScriptError> {
         match self {
             Self::Shell(s) => {
-                let (code, output, error) = run_script::run_script!(s)?;
+
+                let mut options = run_script::ScriptOptions::new();
+                options.working_directory = Some(config::config_dir());
+
+                let (code, output, error) = run_script::run_script!(s, options)?;
                 if code != 0 {
                     eprintln!("WARNING: '{}' returned {}", s, code);
                 }
                 if error.chars()
-                         .filter(|x| !x.is_control())
-                         .collect::<String>() != String::new() {
+                    .filter(|x| !x.is_control())
+                    .collect::<String>() != String::new() {
                     
                     eprintln!("WARNING: '{}' wrote to stderr:", s);
                     eprintln!("{}", error);
