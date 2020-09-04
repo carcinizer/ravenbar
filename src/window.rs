@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use x11rb::protocol::xproto::*;
+use x11rb::protocol::render;
+use x11rb::protocol::render::ConnectionExt as _;
 use x11rb::protocol::Event;
 use x11rb::errors::ConnectionError;
 use x11rb::connection::Connection;
@@ -21,6 +23,7 @@ pub struct Window<'a, T: XConnection> {
     pub colormap: u32,
     pub conn: &'a T,
     pub fontconfig: fontconfig::Fontconfig,
+    pub depth: u8,
 
     screen: &'a Screen
 }
@@ -39,13 +42,24 @@ impl Color {
     }
 
     pub fn from(s: String) -> Self {
-        if s.len() != 7 || &s[0..1] != "#" {
-            panic!("Only #XXXXXX format is currently acceptable")
+        if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {
+            panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable")
         }
-        let r = u8::from_str_radix(&s[1..3], 16).unwrap();
-        let g = u8::from_str_radix(&s[3..5], 16).unwrap();
-        let b = u8::from_str_radix(&s[5..7], 16).unwrap();
-        Self{r,g,b, a: 255}
+        let r = u16::from_str_radix(&s[1..3], 16).unwrap();
+        let g = u16::from_str_radix(&s[3..5], 16).unwrap();
+        let b = u16::from_str_radix(&s[5..7], 16).unwrap();
+
+        let a = if s.len() == 9 {
+            u16::from_str_radix(&s[7..9], 16).unwrap()
+        }
+        else {255};
+
+        // Premultiply results
+        let r = (r*a/256) as u8;
+        let g = (g*a/256) as u8;
+        let b = (b*a/256) as u8;
+        
+        Self{r,g,b,a: a as u8}
     }
 
     pub fn as_xcolor(&self) -> u32 {
@@ -134,7 +148,7 @@ impl Drawable {
             x,
             y,
             0, 
-            24, 
+            window.depth, 
             &data)?;
         
         window.conn.free_gc(gc)?;
@@ -253,23 +267,38 @@ impl WindowGeometry {
     }
 }
 
+/// Get a visual with alpha, hopefully
+fn get_depth_visual(screen: &Screen) -> (u8, Visualid) {
+    for i in screen.allowed_depths.iter() {
+        if i.depth == 32 {
+           return (i.depth, i.visuals[0].visual_id);
+        }
+    }
+    (x11rb::COPY_DEPTH_FROM_PARENT, screen.root_visual)
+}
+
 impl<T: XConnection> Window<'_, T> {
-    pub fn new<'a>(conn: &'a T, screen: &'a Screen, geom: &WindowGeometry) -> Result<Window<'a, T>, Box<dyn Error>> {
-                
+    pub fn new<'a>(conn: &'a T, screen_num: usize) -> Result<Window<'a, T>, Box<dyn Error>> {
+        
+        let screen = &conn.setup().roots[screen_num];
+
+        let (depth, visual) = get_depth_visual(screen);
+
         let window = conn.generate_id()?;
+        let colormap = conn.generate_id()?;
 
-        let (x,y,w,h) = geom.on_screen(screen.width_in_pixels, screen.height_in_pixels);
+        conn.create_colormap(ColormapAlloc::None, colormap, screen.root, visual)?.check()?;
 
-        println!("Window geom: {} {} {} {}", x,y,w,h);
-
-        conn.create_window(x11rb::COPY_DEPTH_FROM_PARENT, window, screen.root,
-                           x,y,w,h, 0, WindowClass::InputOutput, 0,
+        conn.create_window(depth, window, screen.root,
+                           0,0,100,100, 0, WindowClass::InputOutput, visual,
                            &CreateWindowAux::new()
+                                .background_pixel(x11rb::NONE)
+                                .border_pixel(screen.black_pixel)
+                                .colormap(colormap)
                                 .event_mask(EventMask::ButtonPress
-                                          | EventMask::ButtonRelease))?;
+                                          | EventMask::ButtonRelease)
+        )?.check()?;
 
-
-        let colormap = screen.default_colormap;
         
         conn.change_property8(PropMode::Replace, window, AtomEnum::WM_NAME, AtomEnum::STRING, b"Ravenbar")?;
 
@@ -277,9 +306,7 @@ impl<T: XConnection> Window<'_, T> {
 
         let fontconfig = fontconfig::Fontconfig::new().unwrap();
 
-        let wnd = Window {window, colormap, conn, fontconfig, screen};
-
-        wnd.configure(geom)?;
+        let wnd = Window {window, colormap, conn, fontconfig, screen, depth};
 
         Ok(wnd)
     }
@@ -311,6 +338,7 @@ impl<T: XConnection> Window<'_, T> {
         // Ensure window's position
         self.conn.configure_window(self.window, &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32))?;
         
+        self.flush()?;
         self.flush()?;
         Ok(())
     }

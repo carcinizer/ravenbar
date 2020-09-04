@@ -47,12 +47,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     else {
         let (conn, screen_num) = x11rb::connect(None)?;
-        let screen = &conn.setup().roots[screen_num];
-
-        let wnd = window::Window::new(&conn, &screen, &window::WindowGeometry{dir: window::Direction{xdir: 0, ydir: -1}, xoff: 0, yoff: 0, w: 500, h: 25})?;
+        
+        let wnd = window::Window::new(&conn, screen_num)?;
         
         let config = config::BarConfig::new(file)?;
-        let signal_ids = config.get_signals();
 
         let mut b = bar::Bar::create(config, &wnd)?;
 
