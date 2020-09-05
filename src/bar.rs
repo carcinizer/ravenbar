@@ -155,7 +155,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets.iter_mut() {
 
             let props = &i.current;
-            let m = i.mouse_over;
             
             // Redraw
             if i.needs_redraw || i.drawinfo.x != i.last_x { 
