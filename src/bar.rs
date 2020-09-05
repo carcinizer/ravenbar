@@ -46,20 +46,11 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
     pub fn create(cfg: BarConfig, window: &'a Window<'a, T>) -> Result<Self, Box<dyn std::error::Error>> {
 
-        let props = BarProps{
-            alignment: prop!(cfg.props, alignment, Direction, Direction::from("NW".to_owned())), 
-            height: prop!(cfg.props, height, u16, 25),
-        };
+        let props = BarProps::from(&cfg.props);
 
         let widgets = cfg.widgets.iter()
             .map( |widget| {
-                let props = WidgetProps {
-                    foreground: prop!(widget.props, foreground, Drawable, Drawable::from("#FFFFFF".to_owned())),
-                    background: prop!(widget.props, background, Drawable, Drawable::from("#222233".to_owned())),
-                    command: prop!(widget.props, command, Command, Command::None),
-                    border_factor: prop!(widget.props, border_factor, f32, 0.9),
-                    interval: prop!(widget.props, interval, f32, 5.0),
-                };
+                let props = WidgetProps::from(&widget.props);
                 let current = props.as_current(&vec![Event::Default], false);
                 Widget {
                     props,
