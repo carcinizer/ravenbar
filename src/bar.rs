@@ -1,125 +1,16 @@
 
+use crate::props::*;
+use crate::prop;
+
 use crate::window::*;
+use crate::event::Event;
 use crate::window::Drawable;
 use crate::font::Font;
 use crate::command::{CommandGlobalInfo, Command};
 use crate::config::BarConfig;
 
-use std::collections::HashMap;
-use x11rb::protocol::Event as XEvent;
 use std::time::Instant;
 
-
-#[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
-pub enum Event {
-    Default,
-    OnHover,
-    ButtonPressAny,
-    ButtonPressContAny,
-    ButtonReleaseAny,
-    ButtonReleaseContAny,
-}
-
-
-impl Event {
-    pub fn from(event: &String, settings: &String) -> Self { // TODO Errors
-        match &event[..] {
-            "default" => Self::Default,
-            "on_hover" => Self::OnHover,
-            "on_press" => Self::ButtonPressAny,
-            "on_press_cont" => Self::ButtonPressContAny,
-            "on_release" => Self::ButtonReleaseAny,
-            "on_release_cont" => Self::ButtonReleaseContAny,
-            _ => {panic!("Invalid event {}.{}", event, settings)}
-        }
-    }
-
-    pub fn events_from(ev: XEvent) -> Vec<Self> {
-        match ev {
-            XEvent::Expose(_) => vec![Self::Default],
-            XEvent::ButtonPress(_) => vec![Self::ButtonPressAny],
-            XEvent::ButtonRelease(_) => vec![Self::ButtonReleaseAny],
-            _ => { eprintln!("Unknown event: {:?}, reverting to default", ev); vec![Self::Default]}
-        }
-    }
-
-    pub fn precedence(&self) -> u32 {
-        match self {
-            Self::ButtonPressAny => 101,
-            Self::ButtonReleaseAny => 101,
-            Self::ButtonPressContAny => 102,
-            Self::ButtonReleaseContAny => 102,
-            Self::OnHover => 200,
-            Self::Default => 1000
-        }
-    }
-
-    pub fn mouse_dependent(&self) -> bool {
-        match self {
-            Self::OnHover => true,
-            Self::ButtonPressAny => true,
-            Self::ButtonReleaseAny => true,
-            Self::ButtonPressContAny => true,
-            Self::ButtonReleaseContAny => true,
-            _ => false
-        }
-    }
-}
-struct Prop<T> {
-    map: HashMap<Event, T>
-}
-
-impl<T> Prop<T> {
-    fn get(&self, events: &Vec<Event>, mouse_inside: bool) -> &T {
-        for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
-            if let Some(x) = self.map.get(i) {
-                return x;
-            }
-        }
-        panic!("Somewhere something doesn't have any events!");
-    }
-
-    fn get_event<'a>(&self, events: &Vec<Event>, mouse_inside: bool) -> Event {
-        for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
-            if let Some(_) = self.map.get(i) {
-                return i.clone();
-            }
-        }
-        panic!("Somewhere something doesn't have any events!");
-    }
-}
-
-
-macro_rules! prop {
-    ($var:expr, $member:ident, $type:ident, $default:expr) => {{
-        let mut map = HashMap::new();
-        map.insert(Event::Default, $default);
-        for ((k,s),v) in $var.iter() {
-            if let Some(x) = &v.$member {
-                map.insert(Event::from(k, s), $type::from(x.clone()));
-            }
-        }
-        Prop {map}
-    }}
-}
-
-
-struct WidgetProps {
-    foreground: Prop<Drawable>,
-    background: Prop<Drawable>,
-    command: Prop<Command>,
-    border_factor: Prop<f32>,
-    interval: Prop<f32>
-}
-
-#[derive(Clone, PartialEq)]
-struct WidgetPropsCurrent {
-    foreground: Drawable,
-    background: Drawable,
-    command: Command,
-    border_factor: f32,
-    interval: f32
-}
 
 struct Widget {
     props : WidgetProps,
@@ -137,16 +28,6 @@ struct Widget {
     needs_redraw: bool
 }
 
-struct BarProps {
-    alignment: Prop<Direction>,
-    height: Prop<u16>
-}
-
-#[derive(Clone, PartialEq)]
-struct BarPropsCurrent {
-    alignment: Direction,
-    height: u16
-}
 
 pub struct Bar<'a, T: XConnection> {
     widgets: Vec<Widget>,
@@ -282,17 +163,16 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
         for i in self.widgets.iter_mut() {
 
-            let props = &i.props;
+            let props = &i.current;
             let m = i.mouse_over;
             
             // Redraw
             if i.needs_redraw || i.drawinfo.x != i.last_x { 
-                let foreground = props.foreground.get(e,m);
                 let width = i.drawinfo.width;
 
-                foreground.draw_fg(self.window, &i.drawinfo, &self.font, &props.background.get(e,m), &i.cmd_out)?;
+                props.foreground.draw_fg(self.window, &i.drawinfo, &self.font, &props.background, &i.cmd_out)?;
 
-                props.background.get(e,m).draw_bg(self.window, i.drawinfo.x + width as i16, 0, i.width_max - width, height)?;
+                props.background.draw_bg(self.window, i.drawinfo.x + width as i16, 0, i.width_max - width, height)?;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -304,23 +184,3 @@ impl<'a, T: XConnection> Bar<'a, T> {
     }
 }
 
-
-impl WidgetProps {
-    fn as_current(&self, e: &Vec<Event>, m: bool) -> WidgetPropsCurrent {
-        WidgetPropsCurrent {
-            foreground: self.foreground.get(e,m).clone(),
-            background: self.background.get(e,m).clone(),
-            command: self.command.get(e,m).clone(),
-            border_factor: self.border_factor.get(e,m).clone(),
-            interval: self.interval.get(e,m).clone()}
-    }
-}
-
-impl BarProps {
-    fn as_current(&self, e: &Vec<Event>, m: bool) -> BarPropsCurrent {
-        BarPropsCurrent {
-            alignment: self.alignment.get(e,m).clone(),
-            height: self.height.get(e,m).clone()
-        }
-    }
-}

@@ -9,9 +9,11 @@ mod font;
 mod config;
 mod window;
 mod command;
+mod props;
+mod event;
 
 use config::config_dir;
-use bar::Event;
+use event::Event;
 
 #[derive(StructOpt)]
 #[structopt()]

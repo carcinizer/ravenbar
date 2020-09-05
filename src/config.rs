@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use serde_json::{Value, json, from_reader, from_value, to_writer_pretty, Map};
 
-use crate::bar::Event;
+use crate::event::Event;
 extern crate dirs;
 
 pub fn config_dir<'a>() -> std::path::PathBuf {
