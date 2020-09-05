@@ -8,6 +8,7 @@ mod bar;
 mod font;
 mod config;
 mod window;
+mod command;
 
 use config::config_dir;
 use bar::Event;
