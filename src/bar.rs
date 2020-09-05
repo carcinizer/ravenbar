@@ -4,10 +4,10 @@ use crate::prop;
 
 use crate::window::*;
 use crate::event::Event;
-use crate::window::Drawable;
 use crate::font::Font;
 use crate::command::{CommandGlobalInfo, Command};
 use crate::config::BarConfig;
+use crate::draw::DrawFGInfo;
 
 use std::time::Instant;
 

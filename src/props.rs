@@ -6,7 +6,8 @@ use serde::Deserialize;
 
 use crate::event::Event;
 use crate::command::*;
-use crate::window::{Drawable, Direction};
+use crate::window::Direction;
+use crate::draw::Drawable;
 
 pub struct Prop<T> {
     pub map: HashMap<Event, T>
