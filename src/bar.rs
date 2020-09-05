@@ -152,17 +152,13 @@ impl<'a, T: XConnection> Bar<'a, T> {
         }
 
 
+        // Redraw
         for i in self.widgets.iter_mut() {
 
             let props = &i.current;
             
-            // Redraw
             if i.needs_redraw || i.drawinfo.x != i.last_x { 
-                let width = i.drawinfo.width;
-
-                props.foreground.draw_fg(self.window, &i.drawinfo, &self.font, &props.background, &i.cmd_out)?;
-
-                props.background.draw_bg(self.window, i.drawinfo.x + width as i16, 0, i.width_max - width, height)?;
+                props.foreground.draw_all(self.window, &i.drawinfo, i.width_max, &self.font, &props.background, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
