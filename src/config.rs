@@ -58,7 +58,8 @@ pub struct BarConfigWidget {
 #[derive(Debug)]
 pub struct BarConfig {
     pub props: HashMap<(String, String), BarConfigProps>,
-    pub widgets: Vec<BarConfigWidget>
+    pub widgets: Vec<BarConfigWidget>,
+    pub font: String
 }
 
 
@@ -69,6 +70,7 @@ impl BarConfig {
         let mut default_widget = BarConfigWidget::new();
         let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
         let mut widget_arr = Vec::<Value>::new();
+        let mut font = String::new();
 
         let values : Value = from_reader(file)?;
 
@@ -88,6 +90,15 @@ impl BarConfig {
                             widget_arr = arr.clone();
                         }
                         else {panic!("'widgets' value must be an array")}
+                    }
+                    "font" => {
+                        if event != "default".to_owned() {
+                            panic!("Events for fonts are currently not supported (event name: {})", event);
+                        }
+                        if let Value::String(s) = val {
+                            font = s.clone();
+                        }
+                        else {panic!("'font' must be a string")}
                     }
                     _ => {
                         bar_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
@@ -123,7 +134,7 @@ impl BarConfig {
                             widget
                         }).collect();
 
-        Ok(BarConfig {props, widgets})
+        Ok(BarConfig {props, widgets, font})
     }
 
 }

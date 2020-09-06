@@ -65,7 +65,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     needs_redraw: false
             }}).collect();
 
-        let font = Font::new("noto mono", &window.fontconfig).unwrap(); // TODO - font from file
+        let font = Font::new(&cfg.font[..], &window.fontconfig)?;
         let current = props.as_current(&vec![Event::Default], false);
 
         let mut bar = Self {props, widgets, window, font, 
