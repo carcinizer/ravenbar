@@ -76,11 +76,6 @@ impl BarConfig {
             for (key, val) in barconfig.iter() {
                 let (prop, event, settings) = split_key(key);
 
-                // Pseudocomments
-                if &prop[0..1] == "_" {
-                    continue;
-                }
-                
                 match &*prop {
                     "defaults" => {
                         if event != "default" {
