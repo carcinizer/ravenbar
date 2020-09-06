@@ -140,7 +140,8 @@ impl<T: XConnection> Window<'_, T> {
                                 .border_pixel(screen.black_pixel)
                                 .colormap(colormap)
                                 .event_mask(EventMask::ButtonPress
-                                          | EventMask::ButtonRelease)
+                                          | EventMask::ButtonRelease
+                                          | EventMask::Exposure)
         )?.check()?;
 
         
@@ -180,9 +181,9 @@ impl<T: XConnection> Window<'_, T> {
         self.conn.map_window(self.window)?;
 
         // Ensure window's position
-        self.conn.configure_window(self.window, &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32))?;
+        let aux = &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32);
+        self.conn.configure_window(self.window, aux)?;
         
-        self.flush()?;
         self.flush()?;
         Ok(())
     }

@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             
             // Will be filtered out in bar's refresh function
-            evec.push(Event::OnHover);
+            evec.push(Event::Hover);
             evec.push(Event::Default);
             evec.sort_by_key(|x: &Event| x.precedence());
 

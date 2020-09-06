@@ -109,7 +109,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 i.current = new_current;
                 true
             }
-            else {bar_redraw};
+            else {bar_redraw || force};
 
             let props = &i.current;
 
@@ -146,10 +146,13 @@ impl<'a, T: XConnection> Bar<'a, T> {
         // Fake geometry in order to support non-insane on-hover window events
         self.fake_geometry = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.clone()};
         
-        if next_geom != self.geometry {
+        let global_redraw = if next_geom != self.geometry {
             self.geometry = next_geom;
             self.window.configure(&self.geometry)?;
+            true
         }
+        // Redraw on exposure
+        else {events.iter().find(|x| **x == Event::Expose) == None};
 
 
         // Redraw
@@ -157,7 +160,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             let props = &i.current;
             
-            if i.needs_redraw || i.drawinfo.x != i.last_x { 
+            if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
                 props.foreground.draw_all(self.window, &i.drawinfo, i.width_max, &self.font, &props.background, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x; 

@@ -4,7 +4,8 @@ use x11rb::protocol::Event as XEvent;
 #[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
 pub enum Event {
     Default,
-    OnHover,
+    Expose,
+    Hover,
     ButtonPressAny,
     ButtonPressContAny,
     ButtonReleaseAny,
@@ -15,7 +16,7 @@ impl Event {
     pub fn from(event: &String, settings: &String) -> Self { // TODO Errors
         match &event[..] {
             "default" => Self::Default,
-            "on_hover" => Self::OnHover,
+            "on_hover" => Self::Hover,
             "on_press" => Self::ButtonPressAny,
             "on_press_cont" => Self::ButtonPressContAny,
             "on_release" => Self::ButtonReleaseAny,
@@ -26,7 +27,7 @@ impl Event {
 
     pub fn events_from(ev: XEvent) -> Vec<Self> {
         match ev {
-            XEvent::Expose(_) => vec![Self::Default],
+            XEvent::Expose(_) => vec![Self::Expose],
             XEvent::ButtonPress(_) => vec![Self::ButtonPressAny],
             XEvent::ButtonRelease(_) => vec![Self::ButtonReleaseAny],
             _ => { eprintln!("Unknown event: {:?}, reverting to default", ev); vec![Self::Default]}
@@ -39,14 +40,15 @@ impl Event {
             Self::ButtonReleaseAny => 101,
             Self::ButtonPressContAny => 102,
             Self::ButtonReleaseContAny => 102,
-            Self::OnHover => 200,
+            Self::Expose => 105,
+            Self::Hover => 200,
             Self::Default => 1000
         }
     }
 
     pub fn mouse_dependent(&self) -> bool {
         match self {
-            Self::OnHover => true,
+            Self::Hover => true,
             Self::ButtonPressAny => true,
             Self::ButtonReleaseAny => true,
             Self::ButtonPressContAny => true,
