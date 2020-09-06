@@ -75,6 +75,11 @@ impl BarConfig {
         if let Value::Object(barconfig) = values {
             for (key, val) in barconfig.iter() {
                 let (prop, event, settings) = split_key(key);
+
+                // Pseudocomments
+                if &prop[0..1] == "_" {
+                    continue;
+                }
                 
                 match &*prop {
                     "defaults" => {
