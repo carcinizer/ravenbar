@@ -14,9 +14,6 @@ pub struct Color {
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self{r,g,b,a}
-    }
 
     pub fn from(s: String) -> Self {
         if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {

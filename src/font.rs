@@ -2,9 +2,7 @@
 use fontconfig;
 use rusttype;
 use rusttype::{point, PositionedGlyph, Scale};
-use x11rb::protocol::xproto::{ImageFormat, CreateGCAux};
 
-use crate::window::{XConnection, Window};
 use std::error::Error;
 
 use unicode_normalization::UnicodeNormalization;
@@ -22,11 +20,6 @@ impl Font<'_> {
         let font = rusttype::Font::try_from_vec(std::fs::read(fontpath)?).unwrap();
 
         Ok( Self {font} )
-    }
-
-    pub fn height(&self, height: u16) -> u16 {
-        let vmetrics = self.font.v_metrics(scale(height));
-        (vmetrics.ascent - vmetrics.descent) as _
     }
 
     fn ascent(&self, height: u16) -> f32 {

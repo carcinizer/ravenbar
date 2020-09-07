@@ -1,7 +1,7 @@
 
 use std::error::Error;
 use std::fs::{OpenOptions, File};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde_json::{Value, json, from_reader, from_value, to_writer_pretty, Map};

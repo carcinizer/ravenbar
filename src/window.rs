@@ -1,15 +1,10 @@
 
 use std::error::Error;
-use std::collections::HashMap;
-use std::rc::Rc;
 
 use x11rb::protocol::xproto::*;
-use x11rb::protocol::Event;
 use x11rb::errors::ConnectionError;
 use x11rb::connection::Connection;
 use x11rb::wrapper::ConnectionExt;
-
-use crate::font::Font;
 
 // Just an alias for convenience
 pub trait XConnection: Connection + ConnectionExt {}
