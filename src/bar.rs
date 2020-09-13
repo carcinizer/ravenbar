@@ -141,9 +141,19 @@ impl<'a, T: XConnection> Bar<'a, T> {
             widget_cursor += i.width_max as i16;
         }
         
-        let next_geom = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.clone(), solid: bar.solid, above: bar.above, below: bar.below};
+        let next_geom = WindowGeometry {
+            xoff: 0, yoff: 0,
+            w: widget_cursor as u16, h: height, 
+            dir: bar.alignment.clone(), 
+            solid: bar.solid, above: bar.above, below: bar.below
+        };
         // Fake geometry in order to support non-insane on-hover window events
-        self.fake_geometry = WindowGeometry{xoff: 0, yoff: 0, w: widget_cursor as u16, h: height, dir: bar.alignment.clone(), solid: bar.solid, above: bar.above, below: bar.below};
+        self.fake_geometry = WindowGeometry {
+            xoff: 0, yoff: 0, 
+            w: widget_cursor as u16, h: height,
+            dir: *self.props.alignment.get(e,false), 
+            solid: bar.solid, above: bar.above, below: bar.below
+        };
         
         let global_redraw = if next_geom != self.geometry {
             self.geometry = next_geom;
