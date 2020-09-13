@@ -120,7 +120,7 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
     background:     Drawable from String = Drawable::from("#223333".to_string()),
     command:        Command from String = Command::None,
     border_factor:  f32 from f32 = 0.9,
-    interval:       f32 from f32 = 0.3
+    interval:       f32 from f32 = 5.0
 );
 
 // Bar properties
