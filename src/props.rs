@@ -127,6 +127,9 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
 prop_struct!(BarProps, BarPropsCurrent, BarConfigProps, 
 
     alignment:  Direction from String = Direction::from("NW".to_string()),
-    height:     u16 from u16 = 30
+    height:     u16 from u16 = 30,
+    solid:      bool from bool = true,
+    above:      bool from bool = false,
+    below:      bool from bool = false
 );
 
