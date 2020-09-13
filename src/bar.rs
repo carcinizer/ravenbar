@@ -151,7 +151,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             true
         }
         // Redraw on exposure
-        else {events.iter().find(|x| **x == Event::Expose) == None};
+        else {events.iter().find(|x| **x == Event::Expose) != None};
 
 
         // Redraw
