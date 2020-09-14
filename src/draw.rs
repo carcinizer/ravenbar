@@ -76,9 +76,9 @@ impl Color {
 
     pub fn get(&self, i: usize) -> u8 {
         match i {
-            0 => self.r,
+            0 => self.b,
             1 => self.g,
-            2 => self.b,
+            2 => self.r,
             3 => self.a,
             _ => panic!("Tried to access {}th color field", i)
         }

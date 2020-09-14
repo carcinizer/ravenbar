@@ -157,7 +157,7 @@ fn scale(height: u16) -> Scale {
 }
 
 fn mul_comp(a: u8, b: u8) -> u8 {
-    ( a as u16 * b as u16 / 255 ) as u8
+    ( a as u16 * b as u16 / 256 ) as u8
 }
 
 fn combine_comp(a: u8, b: u8, factor: f32) -> u8 {
