@@ -36,28 +36,55 @@ impl Color {
         Self{r,g,b,a: a as u8}
     }
 
+    pub fn sgr_color16(n: u32, b: u8) -> (u8,u8,u8) {
+        match n {
+            0 => (0, 0, 0), // Black
+            1 => (b, 0, 0), // Red
+            2 => (0, b, 0), // Green
+            3 => (b, b, 0), // Yellow
+            4 => (0, 0, b), // Blue
+            5 => (b, 0, b), // Magenta
+            6 => (0, b, b), // Cyan
+            _ => (b, b, b), // White/Gray
+        }
+    }
+
     pub fn from_sgr(n: u32, params: &Vec<u32>) -> Self {
         let (r,g,b) : (u8, u8, u8) = match n {
-            0 => (0,0,0),
-            // TODO Colors
-            1 => (205, 205, 205),
-            2 => (205, 205, 205),
-            3 => (205, 205, 205),
-            4 => (205, 205, 205),
-            5 => (205, 205, 205),
-            6 => (205, 205, 205),
-            7 => (205, 205, 205),
-            9 => (205, 205, 205),
 
             8 => match params.get(0) {
+                // True color
                 Some(2) => match params.get(1..4) {
                     Some(x) => (x[0] as _, x[1] as _, x[2] as _),
-                    None => (205,205,205)
+                    None => Self::sgr_color16(7,205)
                 }
-                Some(5) => (205,205,205),// 256 color palette - TODO
-                _ => (205,205,205)
+                // 256 color palette
+                Some(5) => match params.get(1) {
+                    Some(x) => {
+                        if x < &8 {
+                            Self::sgr_color16(*x,205)
+                        }
+                        else if x < &16 {
+                            Self::sgr_color16(x%16, 255)
+                        }
+                        else if x < &232 {
+                            let r = (x-16) / 36;
+                            let g = ((x-16) / 6) % 6;
+                            let b = (x-16) % 6;
+                            
+                            ((r*256/6) as _, (g*256/6) as _, (b*256/6) as _)
+                        }
+                        else {
+                            let b = ((x - 232) * 256 / 24) as u8;
+                            (b,b,b)
+                        }
+                    }
+                    None => Self::sgr_color16(7,205)
+                },
+                _ => Self::sgr_color16(7, 205)
             }
-            _ => (205,205,205)
+            // 16 color palette
+            _ => Self::sgr_color16(n, 205)
         };
         Self {r,g,b,a: 255}
     }
