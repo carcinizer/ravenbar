@@ -36,8 +36,52 @@ impl Color {
         Self{r,g,b,a: a as u8}
     }
 
+    pub fn from_sgr(n: u32, params: &Vec<u32>) -> Self {
+        let (r,g,b) : (u8, u8, u8) = match n {
+            0 => (0,0,0),
+            // TODO Colors
+            1 => (205, 205, 205),
+            2 => (205, 205, 205),
+            3 => (205, 205, 205),
+            4 => (205, 205, 205),
+            5 => (205, 205, 205),
+            6 => (205, 205, 205),
+            7 => (205, 205, 205),
+            9 => (205, 205, 205),
+
+            8 => match params.get(0) {
+                Some(2) => match params.get(1..4) {
+                    Some(x) => (x[0] as _, x[1] as _, x[2] as _),
+                    None => (205,205,205)
+                }
+                Some(5) => (205,205,205),// 256 color palette - TODO
+                _ => (205,205,205)
+            }
+            _ => (205,205,205)
+        };
+        Self {r,g,b,a: 255}
+    }
+
+    pub fn white() -> Self {
+        Self {r: 255, g: 255, b: 255, a: 255}
+    }
+
+    pub fn bright(&self) -> Self {
+        Self {r: self.r + 50, g: self.g + 50, b: self.b + 50, a: self.a}
+    }
+
     pub fn as_xcolor(&self) -> u32 {
         ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
+    }
+
+    pub fn get(&self, i: usize) -> u8 {
+        match i {
+            0 => self.r,
+            1 => self.g,
+            2 => self.b,
+            3 => self.a,
+            _ => panic!("Tried to access {}th color field", i)
+        }
     }
 }
 
@@ -140,9 +184,7 @@ impl Drawable {
                 let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
                 let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
                 
-                let (glyphs, _) = font.glyphs_and_width(text, i.fgheight);
-
-                font.draw_text(i.width, &glyphs, &fg, &mut bg)?;
+                font.draw_text(i.width, i.fgheight, &text, &fg, &mut bg)?;
 
                 let fgx = i.x + (width_max - i.width) as i16 / 2;
 

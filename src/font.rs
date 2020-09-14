@@ -6,6 +6,80 @@ use rusttype::{point, PositionedGlyph, Scale};
 use std::error::Error;
 
 use unicode_normalization::UnicodeNormalization;
+use crate::draw::Color;
+
+
+pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
+    chars: &'a mut T,
+    fg: Color,
+    bg: Color
+}
+
+impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T> 
+    where T: std::iter::Iterator<Item = char>
+{
+    type Item = (char, Color, Color);
+
+    fn next(&mut self) -> Option<Self::Item> {
+            
+        loop {
+            let first_opt = self.chars.next();
+            if let Some(first) = first_opt {
+                
+                // Escape code && CSI
+                if first == '\x1b' && self.chars.next() == Some('[') {
+
+                    let sgrstring = self.chars
+                        .take_while(|x| !x.is_alphabetic())
+                        .collect::<String>();
+
+                    let mut params = sgrstring
+                        .split(';')
+                        .map(|x| x.parse::<u32>().unwrap_or(0));
+                    
+                    let sgr = params.next().unwrap_or(0);
+                    let color = Color::from_sgr(sgr%10, &params.collect());
+
+                    let (fg,bg) = match sgr/10 {
+                        3   => (color, self.bg),
+                        9   => (color.bright(), self.bg),
+                        4   => (self.fg, color),
+                        10  => (self.fg, color.bright()),
+
+                        0 => if sgr == 0 {
+                                (Color::white(), Color::white())
+                             } 
+                             else {
+                                (self.fg, self.bg)
+                             },
+
+                        _ => (self.fg, self.bg)
+                    };
+                    self.fg = fg;
+                    self.bg = bg;
+                }
+                else if !first.is_control() {
+                    return Some((first, self.fg, self.bg));
+                }
+            }
+            else {
+                return None;
+            }
+        }
+    }
+}
+
+pub trait Formatted<T: std::iter::Iterator<Item = char>> {
+    fn formatted(&mut self) -> FormattedTextIter<'_, T>;
+}
+
+impl<T> Formatted<T> for T 
+    where T: std::iter::Iterator<Item = char> {
+    fn formatted(&mut self) -> FormattedTextIter<'_, T> {
+        FormattedTextIter { chars: self, fg: Color::white(), bg: Color::white() }
+    }
+}
+
 
 pub type FontConfig = fontconfig::Fontconfig;
 
@@ -40,15 +114,20 @@ impl Font<'_> {
     }
 
     pub fn glyphs_and_width(&self, text: &String, height: u16) -> (Vec<PositionedGlyph<'_>>, u16) {
-        let text_nfc = text.nfc().filter(|x| !x.is_control()).collect();
+        let text_nfc = text.nfc().formatted().map(|x| x.0).collect::<String>();
         let glyphs = self.glyphs(&text_nfc, height);
         let width = self.calc_width(&glyphs);
         (glyphs, width)
     }
 
-    pub fn draw_text(&self, width: u16, glyphs: &Vec<PositionedGlyph>, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+    pub fn draw_text(&self, width: u16, height: u16, text: &String, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
 
-        for g in glyphs {
+        let fchars = text.nfc().formatted().collect::<Vec<_>>();
+        
+        let plaintext = fchars.iter().map(|x| x.0).collect::<String>();
+        let glyphs = self.glyphs(&plaintext, height);
+
+        for (g, (fgc,bgc)) in glyphs.iter().zip(fchars.iter().map(|x| (x.1,x.2))) {
             if let Some(bb) = g.pixel_bounding_box() {
                 g.draw( |x,y,v| {
 
@@ -59,7 +138,9 @@ impl Font<'_> {
                     if arrpos < bg.len() {
 
                         for i in 0..3 {
-                            bg[arrpos+i] = combine_comp(fg[arrpos+i], bg[arrpos+i], v);
+                            let fgformat = mul_comp(fg[arrpos+i], fgc.get(i));
+                            let bgformat = mul_comp(bg[arrpos+i], bgc.get(i));
+                            bg[arrpos+i] = combine_comp(fgformat, bgformat, v);
                         }
                     }
                 })
@@ -73,6 +154,10 @@ impl Font<'_> {
 
 fn scale(height: u16) -> Scale {
     Scale{x: height as f32, y: height as f32}
+}
+
+fn mul_comp(a: u8, b: u8) -> u8 {
+    ( a as u16 * b as u16 / 255 ) as u8
 }
 
 fn combine_comp(a: u8, b: u8, factor: f32) -> u8 {
