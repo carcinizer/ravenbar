@@ -166,7 +166,7 @@ impl BarConfigWidget {
 }
 
 
-fn split_key(key: &str) -> (String, String, String) { // TODO Result
+fn split_key(key: &str) -> (String, String, String) {
     let words: Vec<&str> = key.split('.').collect();
 
     let prop = words[0].to_owned();

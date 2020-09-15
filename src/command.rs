@@ -64,7 +64,7 @@ impl CommandGlobalInfo {
 
     fn cpu_freq(&mut self, core: &Option<usize>) -> String {
         // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
-        format!("{:.2}MHz", self.cpu(&Some(core.unwrap_or(0))).get_frequency())
+        format!("{:.2}GHz", self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32 / 1000.0)
     }
 
     fn mem_usage(&mut self) -> String {
@@ -108,7 +108,7 @@ pub fn human_readable(n: u64) -> String {
         else if n > (1 << 10) {(1 << 10, "Ki")}
         else {(1, "")};
 
-    format!("{:.3}{}", n as f64 / div as f64, suffix)
+    format!("{:.2}{}", n as f64 / div as f64, suffix)
 }
 
 #[derive(PartialEq, Clone)]
