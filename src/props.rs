@@ -1,6 +1,7 @@
 
 
 use std::collections::HashMap;
+use serde_json::Value;
 
 use serde::Deserialize;
 
@@ -118,7 +119,7 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
              
     foreground:     Drawable from String = Drawable::from("#FFFFFF".to_string()),
     background:     Drawable from String = Drawable::from("#223333".to_string()),
-    command:        Command from String = Command::None,
+    command:        Command from Value = Command::None,
     border_factor:  f32 from f32 = 0.9,
     interval:       f32 from f32 = 5.0
 );

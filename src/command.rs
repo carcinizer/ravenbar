@@ -2,6 +2,7 @@
 use crate::config::config_dir;
 use std::time::Instant;
 use sysinfo::{System, SystemExt as _, ProcessorExt as _};
+use serde_json::Value;
 
 
 pub struct CommandGlobalInfo {
@@ -58,43 +59,57 @@ impl CommandGlobalInfo {
         }
     }
 
-    fn cpu_usage(&mut self, core: &Option<usize>) -> String {
-        format!("{:.0}%", self.cpu(core).get_cpu_usage())
+    fn mem(&mut self) -> (u64, u64) {
+        self.refresh_mem();
+        (self.system.get_used_memory(), self.system.get_total_memory())
     }
 
-    fn cpu_freq(&mut self, core: &Option<usize>) -> String {
+    fn swap(&mut self) -> (u64, u64) {
+        self.refresh_mem();
+        (self.system.get_used_swap(), self.system.get_total_swap())
+    }
+
+    fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
+        let usage = self.cpu(core).get_cpu_usage();
+        format!("{}{:.0}%", common.color(usage), usage)
+    }
+
+    fn cpu_freq(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
         // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
-        format!("{:.2}GHz", self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32 / 1000.0)
+        let freq = self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32;
+        format!("{}{:.2}GHz", common.color(freq), freq / 1000.0)
     }
 
-    fn mem_usage(&mut self) -> String {
-        self.refresh_mem();
-        human_readable(self.system.get_used_memory() * 1024) + "B"
+    fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, _) = self.mem();
+        common.color(usage as f64) + &human_readable(usage) + "B"
     }
 
-    fn mem_percent(&mut self) -> String {
-        self.refresh_mem();
-        format!("{:.2}%", self.system.get_used_memory() as f32 / self.system.get_total_memory() as f32 * 100.)
+    fn mem_percent(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, total) = self.mem();
+        let percent = usage as f64 / total as f64 * 100.;
+        format!("{}{:.2}%", common.color(percent) ,percent)
     }
 
-    fn mem_total(&mut self) -> String {
-        self.refresh_mem();
-        human_readable(self.system.get_total_memory() * 1024) + "B"
+    fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
+        let (_, total) = self.mem();
+        common.color(total as f64) + &human_readable(total) + "B"
     }
 
-    fn swap_usage(&mut self) -> String {
-        self.refresh_mem();
-        human_readable(self.system.get_used_swap() * 1024) + "B"
+    fn swap_usage(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, _) = self.swap();
+        common.color(usage as f64) + &human_readable(usage) + "B"
     }
 
-    fn swap_percent(&mut self) -> String {
-        self.refresh_mem();
-        format!("{:.2}%", self.system.get_used_swap() as f32 / self.system.get_total_swap() as f32 * 100.)
+    fn swap_percent(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, total) = self.swap();
+        let percent = usage as f64 / total as f64 * 100.;
+        format!("{}{:.2}%", common.color(percent) ,percent)
     }
 
-    fn swap_total(&mut self) -> String {
-        self.refresh_mem();
-        human_readable(self.system.get_total_swap() * 1024) + "B"
+    fn swap_total(&mut self, common: &InternalCommandCommon) -> String {
+        let (_, total) = self.swap();
+        common.color(total as f64) + &human_readable(total) + "B"
     }
 }
 
@@ -112,54 +127,101 @@ pub fn human_readable(n: u64) -> String {
 }
 
 #[derive(PartialEq, Clone)]
+pub struct InternalCommandCommon {
+    warn: Option<f64>,
+    critical: Option<f64>,
+    dim: Option<f64>
+}
+
+impl InternalCommandCommon {
+    fn color(&self, n: impl Into<f64>) -> String {
+        let n = n.into();
+        if n >= self.critical.unwrap_or(f64::MAX) {
+            // Red
+            "\x1b[31m".to_owned()
+        }
+        else if n >= self.warn.unwrap_or(f64::MAX) {
+            // Yellow
+            "\x1b[33m".to_owned()
+        }
+        else if n >= self.dim.unwrap_or(f64::MIN) {
+            // Default
+            "".to_owned()
+        }
+        else {
+            // Gray
+            "\x1b[90m".to_owned()
+        }
+    }
+}
+
+#[derive(PartialEq, Clone)]
 pub enum Command{
     None,
     Shell(String),
     
-    CPUUsage(Option<usize>),
-    CPUFreq(Option<usize>),
+    CPUUsage(Option<usize>, InternalCommandCommon),
+    CPUFreq(Option<usize>, InternalCommandCommon),
 
-    MemUsage,
-    MemPercent,
-    MemTotal,
+    MemUsage(InternalCommandCommon),
+    MemPercent(InternalCommandCommon),
+    MemTotal(InternalCommandCommon),
     
-    SwapUsage,
-    SwapPercent,
-    SwapTotal,
+    SwapUsage(InternalCommandCommon),
+    SwapPercent(InternalCommandCommon),
+    SwapTotal(InternalCommandCommon),
 }
 
 impl Command {
-    pub fn from(s: String) -> Self {
-        if s.len() == 0 {
-            Self::None
-        }
-        else { 
-            match &s[0..1] {
-            "!" => {
-                    let words: Vec<&str> = s[1..].split(" ").collect();
-                    
-                    let arg1_num = if words.len() > 1 {
-                        Some(usize::from_str_radix(words[1], 10).unwrap())
-                    }
-                    else {None};
-                    
-                    match words[0] {
-                        "cpu_usage" => Self::CPUUsage(arg1_num),
-                        "cpu_freq" => Self::CPUFreq(arg1_num),
+    pub fn from(v: Value) -> Self {
+        match v {
+            Value::String(s) => {
+                match s.chars().find(|x| !x.is_whitespace()) {
+                    Some(_) => Self::Shell(s),
+                    None => Self::None
+                }
+            }
+            Value::Object(obj) => {
+                if let Some(Value::String(t)) = obj.get("type") {
 
-                        "mem_usage" => Self::MemUsage,
-                        "mem_percent" => Self::MemPercent,
-                        "mem_total" => Self::MemTotal,
+                    let get_number = |x| match obj.get(x) {
+                        Some(Value::Number(x)) => Some(x.as_f64()
+                            .expect(&format!("{} must be a number", x))),
+                        Some(_) =>  {panic!("{} must be a number", x)}
+                        None => None
+                    };
+
+                    let core = match get_number("core") {
+                        Some(x) => Some(x as _),
+                        None => None
+                    };
+
+                    let common = InternalCommandCommon {
+                        warn: get_number("warn"),
+                        critical: get_number("critical"),
+                        dim: get_number("dim")
+                    };
+
+                    match &t[..] {
+                        "cpu_usage" => Self::CPUUsage(core, common),
+                        "cpu_freq" => Self::CPUFreq(core, common),
+
+                        "mem_usage" => Self::MemUsage(common),
+                        "mem_percent" => Self::MemPercent(common),
+                        "mem_total" => Self::MemTotal(common),
                         
-                        "swap_usage" => Self::SwapUsage,
-                        "swap_percent" => Self::SwapPercent,
-                        "swap_total" => Self::SwapTotal,
+                        "swap_usage" => Self::SwapUsage(common),
+                        "swap_percent" => Self::SwapPercent(common),
+                        "swap_total" => Self::SwapTotal(common),
 
-                        _ => {panic!("Special command not available: {}", s)}
+                        _ => {panic!("Command type '{}' not available", t)}
                     }
                 }
-                _ => Command::Shell(s.to_owned())
+                else {
+                    panic!("'type' property of command must exist if it's an object");
+                }
             }
+            _ => panic!("'command' must be either a string or an object with a required value 'type'")
         }
     }
 
@@ -183,29 +245,29 @@ impl Command {
                 }
                 Ok(output)
             }
-            Self::CPUUsage(core) => {
-                Ok(gi.cpu_usage(core))
+            Self::CPUUsage(core, common) => {
+                Ok(gi.cpu_usage(core, common))
             }
-            Self::CPUFreq(core) => {
-                Ok(gi.cpu_freq(core))
+            Self::CPUFreq(core, common) => {
+                Ok(gi.cpu_freq(core, common))
             }
-            Self::MemUsage => {
-                Ok(gi.mem_usage())
+            Self::MemUsage(common) => {
+                Ok(gi.mem_usage(common))
             }
-            Self::MemPercent => {
-                Ok(gi.mem_percent())
+            Self::MemPercent(common) => {
+                Ok(gi.mem_percent(common))
             }
-            Self::MemTotal => {
-                Ok(gi.mem_total())
+            Self::MemTotal(common) => {
+                Ok(gi.mem_total(common))
             }
-            Self::SwapUsage => {
-                Ok(gi.swap_usage())
+            Self::SwapUsage(common) => {
+                Ok(gi.swap_usage(common))
             }
-            Self::SwapPercent => {
-                Ok(gi.swap_percent())
+            Self::SwapPercent(common) => {
+                Ok(gi.swap_percent(common))
             }
-            Self::SwapTotal => {
-                Ok(gi.swap_total())
+            Self::SwapTotal(common) => {
+                Ok(gi.swap_total(common))
             }
             Self::None => Ok(String::new()),
         }
