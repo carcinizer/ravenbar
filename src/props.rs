@@ -35,7 +35,6 @@ impl<T> Prop<T> {
     }
 }
 
-#[macro_export]
 macro_rules! prop {
     ($var:expr, $member:ident, $type:ident, $default:expr) => {{
         
