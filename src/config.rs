@@ -76,7 +76,7 @@ impl BarConfig {
         let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
         let mut widget_left_arr = Vec::<Value>::new();
         let mut widget_right_arr = Vec::<Value>::new();
-        let mut font = String::new();
+        let mut font = String::from("Monospace");
 
         let values : Value = from_reader(file)?;
 
@@ -152,8 +152,8 @@ impl BarConfig {
         let default_bg = match default_widget.props
             .get(&("default".to_string(), String::new())) 
         {
-            Some(x) => x.background.clone().unwrap_or("#223333".to_string()),
-            None => "#223333".to_string()
+            Some(x) => x.background.clone().unwrap_or("#222233".to_string()),
+            None => "#222233".to_string()
         };
 
         Ok(BarConfig {props, widgets_left, widgets_right, font, default_bg})

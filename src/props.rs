@@ -117,17 +117,17 @@ fn mix_options<T: Clone>(parent: &Option<T>, child: &Option<T>) -> Option<T> {
 prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps, 
              
     foreground:     Drawable from String = Drawable::from("#FFFFFF".to_string()),
-    background:     Drawable from String = Drawable::from("#223333".to_string()),
+    background:     Drawable from String = Drawable::from("#222233".to_string()),
     command:        Command from Value = Command::None,
-    border_factor:  f32 from f32 = 0.9,
+    border_factor:  f32 from f32 = 0.75,
     interval:       f32 from f32 = 5.0
 );
 
 // Bar properties
 prop_struct!(BarProps, BarPropsCurrent, BarConfigProps, 
 
-    alignment:      Direction from String = Direction::from("NW".to_string()),
-    height:         u16 from u16 = 30,
+    alignment:      Direction from String = Direction::from("N".to_string()),
+    height:         u16 from u16 = 24,
     screenwidth:    f32 from f32 = 1.0,
     solid:          bool from bool = true,
     above:          bool from bool = false,
