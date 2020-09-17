@@ -225,14 +225,16 @@ impl Command {
         }
     }
 
-    pub fn execute(&self, gi: &mut CommandGlobalInfo) -> Result<String, run_script::ScriptError> {
+    pub fn execute(&self, gi: &mut CommandGlobalInfo) -> String {
         match self {
             Self::Shell(s) => {
 
                 let mut options = run_script::ScriptOptions::new();
                 options.working_directory = Some(config_dir());
 
-                let (code, output, error) = run_script::run_script!(s, options)?;
+                let (code, output, error) = run_script::run_script!(s, options)
+                    .expect("Failed to run shell script");
+
                 if code != 0 {
                     eprintln!("WARNING: '{}' returned {}", s, code);
                 }
@@ -243,33 +245,33 @@ impl Command {
                     eprintln!("WARNING: '{}' wrote to stderr:", s);
                     eprintln!("{}", error);
                 }
-                Ok(output)
+                output
             }
             Self::CPUUsage(core, common) => {
-                Ok(gi.cpu_usage(core, common))
+                gi.cpu_usage(core, common)
             }
             Self::CPUFreq(core, common) => {
-                Ok(gi.cpu_freq(core, common))
+                gi.cpu_freq(core, common)
             }
             Self::MemUsage(common) => {
-                Ok(gi.mem_usage(common))
+                gi.mem_usage(common)
             }
             Self::MemPercent(common) => {
-                Ok(gi.mem_percent(common))
+                gi.mem_percent(common)
             }
             Self::MemTotal(common) => {
-                Ok(gi.mem_total(common))
+                gi.mem_total(common)
             }
             Self::SwapUsage(common) => {
-                Ok(gi.swap_usage(common))
+                gi.swap_usage(common)
             }
             Self::SwapPercent(common) => {
-                Ok(gi.swap_percent(common))
+                gi.swap_percent(common)
             }
             Self::SwapTotal(common) => {
-                Ok(gi.swap_total(common))
+                gi.swap_total(common)
             }
-            Self::None => Ok(String::new()),
+            Self::None => String::new(),
         }
     }
 }

@@ -80,33 +80,32 @@ impl<'a, T: XConnection> Bar<'a, T> {
         Ok(bar)
     }
 
-    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) -> Result<(), Box<dyn std::error::Error>> {
-        
+    pub fn refresh_widgets(&mut self, 
+        side: bool,
+        events: &Vec<Event>, 
+        force: bool, 
+        bar_redraw: bool, 
+        mx: i16, my: i16) -> i16 
+    {
         let mut widget_cursor = 0;
-        let e = &events;
         
-        // Determine if mouse is inside bar
-        let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
-        
-        // Get props and determine whether they changed
-        let new_current = self.props.as_current(e,bm);
-        let bar_redraw = if new_current != self.current {
-            self.current = new_current;
-            true
-        }
-        else {false};
-
         let bar = &self.current;
         let height = bar.height;
+        let e = events;
 
-        for i in self.widgets_left.iter_mut() {
+        let widgets = match side {
+            true => self.widgets_left.iter_mut(),
+            false => self.widgets_right.iter_mut()
+        };
+
+        for i in widgets {
 
             // Determine if mouse is inside widget
             let m = self.fake_geometry
                 .cropped(widget_cursor, 0, i.width_max, height)
                 .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
 
-            // Get widget props and determine whetherthey changed
+            // Get widget props and determine whether they changed
             let new_current = i.props.as_current(e,m);
             i.needs_redraw = if new_current != i.current {
                 i.current = new_current;
@@ -120,7 +119,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             if force || i.last_time_updated.elapsed().as_millis() > (props.interval * 1000.0) as u128
                      || i.last_event_updated != i.props.command.get_event(e,m) {
                      
-                let new_cmd_out = props.command.execute(&mut self.cmdginfo)?;
+                let new_cmd_out = props.command.execute(&mut self.cmdginfo);
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = i.props.command.get_event(e,m);
 
@@ -144,17 +143,46 @@ impl<'a, T: XConnection> Bar<'a, T> {
             i.mouse_over = m;
             widget_cursor += i.width_max as i16;
         }
+
+        widget_cursor 
+    }
+
+    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) -> Result<(), Box<dyn std::error::Error>> {
         
+        let e = &events;
+        
+        // Determine if mouse is inside bar
+        let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
+        
+        // Get bar props and determine whether they changed
+        let new_current = self.props.as_current(e,bm);
+
+        let bar_redraw = if new_current != self.current {
+            self.current = new_current;
+            true
+        }
+        else {false};
+
+        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, mx, my);
+        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, mx, my);
+
+        let bar = &self.current;
+        let height = bar.height;
+
+        let width = width_left + width_right;
+        let offset = width_left;
+
+        // Recalculate geometry
         let next_geom = WindowGeometry {
             xoff: 0, yoff: 0,
-            w: widget_cursor as u16, h: height, 
+            w: width as u16, h: height, 
             dir: bar.alignment.clone(), 
             solid: bar.solid, above: bar.above, below: bar.below
         };
         // Fake geometry in order to support non-insane on-hover window events
         self.fake_geometry = WindowGeometry {
             xoff: 0, yoff: 0, 
-            w: widget_cursor as u16, h: height,
+            w: width as u16, h: height,
             dir: *self.props.alignment.get(e,false), 
             solid: bar.solid, above: bar.above, below: bar.below
         };
@@ -168,18 +196,25 @@ impl<'a, T: XConnection> Bar<'a, T> {
         else {events.iter().find(|x| **x == Event::Expose) != None};
 
 
-        // Redraw
+        // Redraw left widgets
         for i in self.widgets_left.iter_mut() {
 
-            let props = &i.current;
-            
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                props.foreground.draw_all(self.window, &i.drawinfo, i.width_max, &self.font, &props.background, &i.cmd_out)?;
+                i.current.foreground.draw_all(self.window, &i.drawinfo, 0, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
-        
+        // Redraw right widgets
+        for i in self.widgets_right.iter_mut() {
+
+            if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
+                i.current.foreground.draw_all(self.window, &i.drawinfo, offset, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+            }
+            i.last_x = i.drawinfo.x; 
+            i.needs_redraw = false;
+        }
+
         self.window.flush()?;
 
         Ok(())

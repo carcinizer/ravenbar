@@ -201,7 +201,14 @@ impl Drawable {
     }
     
 
-    pub fn draw_all<T: XConnection>(&self, window: &Window<T>, info: &DrawFGInfo, width_max: u16, font: &Font, background: &Drawable, text: &String) -> Result<(),Box<dyn Error>> 
+    pub fn draw_all<T: XConnection>(&self, 
+        window: &Window<T>, 
+        info: &DrawFGInfo, 
+        offset: i16,
+        width_max: u16, 
+        font: &Font, 
+        background: &Drawable, 
+        text: &String) -> Result<(),Box<dyn Error>> 
     {
         let i = info;
 
@@ -216,15 +223,15 @@ impl Drawable {
                 let fgx = i.x + (width_max - i.width) as i16 / 2;
 
                 // Text
-                self.draw_image(window, fgx, i.fgy, i.width, i.fgheight, &bg)?;
+                self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
 
                 // Top and bottom borders
-                background.draw_bg(window, i.x, i.y, width_max, (i.fgy - i.y) as _)?;
-                background.draw_bg(window, i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _)?;
+                background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _)?;
+                background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _)?;
                 
                 // Left and right borders
-                background.draw_bg(window, i.x, i.fgy, (fgx - i.x) as _, i.fgheight)?;
-                background.draw_bg(window, fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight)?;
+                background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight)?;
+                background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight)?;
 
                 Ok(())
             }
