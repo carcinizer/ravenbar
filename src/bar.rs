@@ -180,14 +180,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
             xoff: 0, yoff: 0,
             w: width as u16, h: height, 
             dir: bar.alignment.clone(), 
-            solid: bar.solid, above: bar.above, below: bar.below
+            solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
         // Fake geometry in order to support non-insane on-hover window events
         self.fake_geometry = WindowGeometry {
             xoff: 0, yoff: 0, 
             w: width as u16, h: height,
             dir: *self.props.alignment.get(e,false), 
-            solid: bar.solid, above: bar.above, below: bar.below
+            solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
         
         let global_redraw = if next_geom != self.geometry {

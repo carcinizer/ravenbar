@@ -76,11 +76,12 @@ pub struct WindowGeometry {
     pub solid: bool,
     pub above: bool,
     pub below: bool,
+    pub visible: bool,
 }
 
 impl WindowGeometry {
     pub fn new() -> Self {
-        Self {dir: Direction::from("N".to_owned()), xoff:0,yoff:0,w:0,h:0, solid: false, above: false, below: false}
+        Self {dir: Direction::from("N".to_owned()), xoff:0,yoff:0,w:0,h:0, solid: false, above: false, below: false, visible: true}
     }
 
     pub fn on_screen(&self, scrw: u16, scrh: u16) -> (i16, i16, u16, u16) {
@@ -203,7 +204,12 @@ impl<T: XConnection> Window<'_, T> {
         self.set_atom32(self.atoms._NET_WM_STRUT, AtomEnum::CARDINAL, &geom.strut()[0..4])?;
         self.set_atom32(self.atoms._NET_WM_STRUT_PARTIAL, AtomEnum::CARDINAL, &geom.strut())?;
 
-        self.conn.map_window(self.window)?;
+        if geom.visible {
+            self.conn.map_window(self.window)?;
+        }
+        else {
+            self.conn.unmap_window(self.window)?;
+        }
 
         // Ensure window's position
         let aux = &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32);

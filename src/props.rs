@@ -131,6 +131,7 @@ prop_struct!(BarProps, BarPropsCurrent, BarConfigProps,
     screenwidth:    f32 from f32 = 1.0,
     solid:          bool from bool = true,
     above:          bool from bool = false,
-    below:          bool from bool = false
+    below:          bool from bool = false,
+    visible:        bool from bool = true
 );
 
