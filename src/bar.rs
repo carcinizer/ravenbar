@@ -5,7 +5,7 @@ use crate::window::*;
 use crate::event::Event;
 use crate::font::Font;
 use crate::command::CommandGlobalInfo;
-use crate::config::BarConfig;
+use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::DrawFGInfo;
 
 use std::time::Instant;
@@ -29,7 +29,8 @@ struct Widget {
 
 
 pub struct Bar<'a, T: XConnection> {
-    widgets: Vec<Widget>,
+    widgets_left: Vec<Widget>,
+    widgets_right: Vec<Widget>,
     props: BarProps,
 
     current: BarPropsCurrent,
@@ -47,7 +48,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
         let props = BarProps::from(&cfg.props);
 
-        let widgets = cfg.widgets.iter()
+        let create_widgets = |widgets: &Vec<BarConfigWidget>| widgets.iter()
             .map( |widget| {
                 let props = WidgetProps::from(&widget.props);
                 let current = props.as_current(&vec![Event::Default], false);
@@ -63,11 +64,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     mouse_over: false,
                     needs_redraw: false
             }}).collect();
+        
+        let widgets_left  = create_widgets(&cfg.widgets_left);
+        let widgets_right = create_widgets(&cfg.widgets_right);
 
         let font = Font::new(&cfg.font[..], &window.fontconfig)?;
         let current = props.as_current(&vec![Event::Default], false);
 
-        let mut bar = Self {props, widgets, window, font, 
+        let mut bar = Self {props, widgets_left, widgets_right, window, font, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdginfo: CommandGlobalInfo::new()
@@ -95,7 +99,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let bar = &self.current;
         let height = bar.height;
 
-        for i in self.widgets.iter_mut() {
+        for i in self.widgets_left.iter_mut() {
 
             // Determine if mouse is inside widget
             let m = self.fake_geometry
@@ -165,7 +169,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
 
         // Redraw
-        for i in self.widgets.iter_mut() {
+        for i in self.widgets_left.iter_mut() {
 
             let props = &i.current;
             

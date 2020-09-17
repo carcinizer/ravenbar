@@ -58,7 +58,10 @@ pub struct BarConfigWidget {
 #[derive(Debug)]
 pub struct BarConfig {
     pub props: HashMap<(String, String), BarConfigProps>,
-    pub widgets: Vec<BarConfigWidget>,
+    // pub widgets: Vec<BarConfigWidget>,
+    pub widgets_left: Vec<BarConfigWidget>,
+    pub widgets_right: Vec<BarConfigWidget>,
+
     pub font: String
 }
 
@@ -69,7 +72,8 @@ impl BarConfig {
 
         let mut default_widget = BarConfigWidget::new();
         let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
-        let mut widget_arr = Vec::<Value>::new();
+        let mut widget_left_arr = Vec::<Value>::new();
+        let mut widget_right_arr = Vec::<Value>::new();
         let mut font = String::new();
 
         let values : Value = from_reader(file)?;
@@ -85,9 +89,15 @@ impl BarConfig {
                         }
                         default_widget = BarConfigWidget::create(val)?;
                     }
-                    "widgets" => {
+                    "widgets_left" => {
                         if let Value::Array(arr) = val {
-                            widget_arr = arr.clone();
+                            widget_left_arr = arr.clone();
+                        }
+                        else {panic!("'widgets' value must be an array")}
+                    }
+                    "widgets_right" => {
+                        if let Value::Array(arr) = val {
+                            widget_right_arr = arr.clone();
                         }
                         else {panic!("'widgets' value must be an array")}
                     }
@@ -116,7 +126,7 @@ impl BarConfig {
                                 .unwrap()) 
                         ).collect();
 
-        let widgets: Vec<BarConfigWidget> = widget_arr
+        let mut create_widgets = |widget_arr: &Vec<Value>| widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
                             
@@ -133,10 +143,12 @@ impl BarConfig {
                             }
                             widget
                         }).collect();
+        
+        let widgets_left  = create_widgets(&widget_left_arr);
+        let widgets_right = create_widgets(&widget_right_arr);
 
-        Ok(BarConfig {props, widgets, font})
+        Ok(BarConfig {props, widgets_left, widgets_right, font})
     }
-
 }
 
 impl BarConfigWidget {
