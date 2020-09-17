@@ -68,7 +68,7 @@ macro_rules! prop_struct {
 
         #[derive(Deserialize, Clone, Debug)]
         pub struct $ConfigProps {
-            $($name: Option<$rawtype>,)*
+            $(pub $name: Option<$rawtype>,)*
         }
 
         impl $Props {
@@ -126,10 +126,11 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
 // Bar properties
 prop_struct!(BarProps, BarPropsCurrent, BarConfigProps, 
 
-    alignment:  Direction from String = Direction::from("NW".to_string()),
-    height:     u16 from u16 = 30,
-    solid:      bool from bool = true,
-    above:      bool from bool = false,
-    below:      bool from bool = false
+    alignment:      Direction from String = Direction::from("NW".to_string()),
+    height:         u16 from u16 = 30,
+    screenwidth:    f32 from f32 = 1.0,
+    solid:          bool from bool = true,
+    above:          bool from bool = false,
+    below:          bool from bool = false
 );
 

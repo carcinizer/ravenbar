@@ -17,6 +17,7 @@ pub fn config_dir<'a>() -> std::path::PathBuf {
 }
 
 pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
+    // TODO put some examples folder
     let default_json = json!({
         
         "alignment" : "NE",
@@ -61,6 +62,7 @@ pub struct BarConfig {
     // pub widgets: Vec<BarConfigWidget>,
     pub widgets_left: Vec<BarConfigWidget>,
     pub widgets_right: Vec<BarConfigWidget>,
+    pub default_bg: String,
 
     pub font: String
 }
@@ -147,7 +149,14 @@ impl BarConfig {
         let widgets_left  = create_widgets(&widget_left_arr);
         let widgets_right = create_widgets(&widget_right_arr);
 
-        Ok(BarConfig {props, widgets_left, widgets_right, font})
+        let default_bg = match default_widget.props
+            .get(&("default".to_string(), String::new())) 
+        {
+            Some(x) => x.background.clone().unwrap_or("#223333".to_string()),
+            None => "#223333".to_string()
+        };
+
+        Ok(BarConfig {props, widgets_left, widgets_right, font, default_bg})
     }
 }
 

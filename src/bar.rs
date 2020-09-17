@@ -6,7 +6,7 @@ use crate::event::Event;
 use crate::font::Font;
 use crate::command::CommandGlobalInfo;
 use crate::config::{BarConfig, BarConfigWidget};
-use crate::draw::DrawFGInfo;
+use crate::draw::{Drawable, DrawFGInfo};
 
 use std::time::Instant;
 
@@ -32,6 +32,7 @@ pub struct Bar<'a, T: XConnection> {
     widgets_left: Vec<Widget>,
     widgets_right: Vec<Widget>,
     props: BarProps,
+    default_bg: Drawable,
 
     current: BarPropsCurrent,
 
@@ -74,7 +75,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let mut bar = Self {props, widgets_left, widgets_right, window, font, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
-            cmdginfo: CommandGlobalInfo::new()
+            cmdginfo: CommandGlobalInfo::new(),
+            default_bg: Drawable::from(cfg.default_bg)
         };
         bar.refresh(vec![Event::Default], true, 0, 0)?;
         Ok(bar)
@@ -169,8 +171,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let bar = &self.current;
         let height = bar.height;
 
-        let width = width_left + width_right;
-        let offset = width_left;
+        let minwidth = (self.window.screen_width() as f32 * bar.screenwidth) as i16;
+        let width = minwidth.max(width_left + width_right);
+        let offset = width - width_right;
 
         // Recalculate geometry
         let next_geom = WindowGeometry {
@@ -214,6 +217,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
+        // Draw background between widget chunks
+        self.default_bg.draw_bg(self.window, width_left, 0, (offset - width_left) as u16, height)?;
 
         self.window.flush()?;
 
