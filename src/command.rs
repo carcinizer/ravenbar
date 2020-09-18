@@ -61,12 +61,12 @@ impl CommandGlobalInfo {
 
     fn mem(&mut self) -> (u64, u64) {
         self.refresh_mem();
-        (self.system.get_used_memory() * 1024, self.system.get_total_memory() * 1024)
+        (self.system.get_used_memory() * 1000, self.system.get_total_memory() * 1000)
     }
 
     fn swap(&mut self) -> (u64, u64) {
         self.refresh_mem();
-        (self.system.get_used_swap() * 1024, self.system.get_total_swap() * 1024)
+        (self.system.get_used_swap() * 1000, self.system.get_total_swap() * 1000)
     }
 
     fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
