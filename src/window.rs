@@ -125,7 +125,7 @@ impl WindowGeometry {
                 0,
                 0,
                 if self.dir.ydir == -1 {(self.h as i16 + self.yoff) as u32} else {0},
-                if self.dir.ydir ==  1 {(self.h as i16 + self.xoff) as u32} else {0},
+                if self.dir.ydir ==  1 {(self.h as i16 + self.yoff) as u32} else {0},
                 0,0,0,0,0,0,0,0
             ]
         } else {[ 0,0,0,0,0,0,0,0,0,0,0,0 ]}
