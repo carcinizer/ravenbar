@@ -119,6 +119,7 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
     foreground:     Drawable from String = Drawable::from("#FFFFFF".to_string()),
     background:     Drawable from String = Drawable::from("#222233".to_string()),
     command:        Command from Value = Command::None,
+    action:         Command from Value = Command::None,
     border_factor:  f32 from f32 = 0.75,
     interval:       f32 from f32 = 5.0
 );
