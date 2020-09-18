@@ -158,6 +158,17 @@ impl BarConfig {
 
         Ok(BarConfig {props, widgets_left, widgets_right, font, default_bg})
     }
+
+    pub fn get_files_to_watch(&self) -> HashMap<PathBuf, std::time::SystemTime> {
+        self.props.keys()
+            .chain(self.widgets_left.iter().flat_map(|x| x.props.keys()))
+            .chain(self.widgets_right.iter().flat_map(|x| x.props.keys()))
+            .filter(|x| &x.0[..] == "on_file_changed")
+            .map(|x| (config_dir().join(&x.1), std::fs::metadata(config_dir().join(&x.1))
+                            .expect("File not found").modified()
+                            .expect("Could not get file modification time")
+            )).collect()
+    }
 }
 
 impl BarConfigWidget {

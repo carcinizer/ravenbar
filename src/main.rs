@@ -55,6 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let wnd = window::Window::new(&conn, screen_num)?;
         
         let config = config::BarConfig::new(file)?;
+        let mut files_last_changed = config.get_files_to_watch();
 
         let mut b = bar::Bar::create(config, &wnd)?;
 
@@ -62,13 +63,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             let (x,y) = wnd.get_pointer()?;
             let ev_opt = conn.poll_for_event()?;
             
-            let mut evec = vec![];
+            let mut evec : Vec<Event> = vec![];
             
             if let Some(e1) = ev_opt {
-                evec.extend(&Event::events_from(e1));
+                evec.extend(Event::events_from(e1));
 
                 while let Some(e) = conn.poll_for_event()? {
-                    evec.extend(&Event::events_from(e));
+                    evec.extend(Event::events_from(e));
+                }
+            }
+
+            for (file, time) in files_last_changed.iter_mut() {
+                let newtime = std::fs::metadata(file).expect("File not found")
+                    .modified().expect("Could not get file modification time");
+
+                if newtime > *time {
+                    *time = newtime;
+                    evec.push(Event::FileChanged(file.clone()));
                 }
             }
             

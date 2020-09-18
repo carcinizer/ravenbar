@@ -9,6 +9,8 @@ use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawFGInfo};
 
 use std::time::Instant;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 
 struct Widget {

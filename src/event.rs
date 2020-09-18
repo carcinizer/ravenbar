@@ -1,7 +1,8 @@
 
 use x11rb::protocol::Event as XEvent;
+use crate::config::config_dir;
 
-#[derive(PartialEq, Eq, Debug, Hash, Copy, Clone)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Event {
     Default,
     Expose,
@@ -10,6 +11,7 @@ pub enum Event {
     ButtonPressContAny,
     ButtonReleaseAny,
     ButtonReleaseContAny,
+    FileChanged(std::path::PathBuf),
 }
 
 impl Event {
@@ -21,6 +23,7 @@ impl Event {
             "on_press_cont" => Self::ButtonPressContAny,
             "on_release" => Self::ButtonReleaseAny,
             "on_release_cont" => Self::ButtonReleaseContAny,
+            "on_file_changed" => Self::FileChanged(config_dir().join(settings)),
             _ => {panic!("Invalid event {}.{}", event, settings)}
         }
     }
@@ -40,6 +43,7 @@ impl Event {
             Self::ButtonReleaseAny => 101,
             Self::ButtonPressContAny => 102,
             Self::ButtonReleaseContAny => 102,
+            Self::FileChanged(_) => 104,
             Self::Expose => 105,
             Self::Hover => 200,
             Self::Default => 1000
