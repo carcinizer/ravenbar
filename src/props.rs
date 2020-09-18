@@ -25,7 +25,7 @@ impl<T> Prop<T> {
         panic!("Somewhere something doesn't have any events!");
     }
 
-    pub fn get_event<'a>(&self, events: &Vec<Event>, mouse_inside: bool) -> Event {
+    pub fn get_event(&self, events: &Vec<Event>, mouse_inside: bool) -> Event {
         for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
             if let Some(_) = self.map.get(i) {
                 return i.clone();

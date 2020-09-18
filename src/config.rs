@@ -199,18 +199,12 @@ impl BarConfigWidget {
 
 
 fn split_key(key: &str) -> (String, String, String) {
-    let words: Vec<&str> = key.split('.').collect();
+    let words: Vec<&str> = key.splitn(3, '.').collect();
 
-    let prop = words[0].to_owned();
-    let event = match words.len() {
-        1 => "default".to_owned(),
-        _ => words[1].to_owned()
-    };
-    let settings = match words.len() {
-        1 => "".to_owned(),
-        2 => "".to_owned(),
-        _ => words[2..].join(".")
-    };
-    (prop, event, settings)
+    let prop     = words[0].to_owned();
+    let event    = words.get(1).unwrap_or(&"default");
+    let settings = words.get(2).unwrap_or(&"");
+
+    (prop, event.to_string(), settings.to_string())
 }
 
