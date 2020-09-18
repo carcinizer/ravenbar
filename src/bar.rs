@@ -177,14 +177,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
         // Recalculate geometry
         let next_geom = WindowGeometry {
-            xoff: 0, yoff: 0,
+            xoff: bar.xoff, yoff: bar.yoff,
             w: width as u16, h: height, 
             dir: bar.alignment.clone(), 
             solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
         // Fake geometry in order to support non-insane on-hover window events
         self.fake_geometry = WindowGeometry {
-            xoff: 0, yoff: 0, 
+            xoff: *self.props.xoff.get(e,false), yoff: *self.props.yoff.get(e,false), 
             w: width as u16, h: height,
             dir: *self.props.alignment.get(e,false), 
             solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
