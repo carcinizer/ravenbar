@@ -233,7 +233,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             i.needs_redraw = false;
         }
         // Draw background between widget chunks
-        self.default_bg.draw_bg(self.window, width_left, 0, (offset - width_left) as u16, height)?;
+        self.default_bg.draw_bg(self.window, width_left, 0, (offset - width_left) as u16, height, height)?;
 
         self.window.flush()?;
 

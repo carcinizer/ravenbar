@@ -1,7 +1,9 @@
 
+use std::error::Error;
+
 use crate::window::{Window, XConnection};
 use crate::font::Font;
-use std::error::Error;
+use crate::utils::mix_comp;
 
 use x11rb::protocol::xproto::*;
 
@@ -15,7 +17,7 @@ pub struct Color {
 
 impl Color {
 
-    pub fn from(s: String) -> Self {
+    pub fn from(s: &str) -> Self {
         if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {
             panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable")
         }
@@ -110,11 +112,20 @@ impl Color {
             _ => panic!("Tried to access {}th color field", i)
         }
     }
+
+    pub fn mix(&self, other: &Self, factor: f32) -> Self {
+        let r = mix_comp(self.r, other.r, factor);
+        let g = mix_comp(self.g, other.g, factor);
+        let b = mix_comp(self.b, other.b, factor);
+        let a = mix_comp(self.a, other.a, factor);
+        Self {r,g,b,a}
+    }
 }
 
 #[derive(Clone, PartialEq)]
 pub enum Drawable {
-    Color(Color)
+    Color(Color),
+    VGradient(Vec<Color>)
 }
 
 pub struct DrawFGInfo {
@@ -142,24 +153,42 @@ impl DrawFGInfo {
 
 impl Drawable {
     pub fn from(s: String) -> Self { // TODO Error handling, as usual
-        Drawable::Color(Color::from(s))
-    }
-
-    fn image(&self, _x: i16, _y: i16, width: u16, height: u16, _maxheight: u16) -> Vec<u8> {
-        match self {
-            Self::Color(c) => {
-                let size = width as usize * height as usize;
-                let mut v = Vec::with_capacity(size * 4);
-
-                for _ in 0..size {
-                    v.extend(&[c.b, c.r, c.g, c.a]);
-                }
-                v
-            }
+        let colors = s.split(";").map(|x| Color::from(x)).collect::<Vec<_>>();
+        match colors.len() {
+            1 => Self::Color(colors[0]),
+            _ => Self::VGradient(colors)
         }
     }
 
-    pub fn draw_bg<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16)
+    fn image(&self, _x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> Vec<u8> {
+        let size = width as usize * height as usize;
+        let mut v = Vec::with_capacity(size * 4);
+        
+        match self {
+            Self::Color(c) => {
+                for _ in 0..size {
+                    v.extend(&[c.b, c.g, c.r, c.a]);
+                }
+            }
+            Self::VGradient(cv) => {
+                for iy in 0..height {
+                    for _ in 0..width {
+                        let index = ((y as f32 + iy as f32)/maxheight as f32) * (cv.len() - 1) as f32;
+
+                        let color1: Color = cv[index.floor() as usize];
+                        let color2: Color = cv[index.ceil() as usize];
+                        let c = color1.mix(&color2, index.fract());
+
+                        v.extend(&[c.b, c.g, c.r, c.a]);
+                    }
+                }
+            }
+        }
+
+        v
+    }
+
+    pub fn draw_bg<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16, maxheight: u16)
         -> Result<(), Box<dyn Error>> 
     {
         match self {
@@ -175,6 +204,8 @@ impl Drawable {
 
                 window.conn.free_gc(gc)?;
             }
+            _ => self.draw_image(window, x, y, width, height, 
+                             &self.image(x, y, width, height, maxheight))?
         }
         Ok(())
     }
@@ -212,30 +243,25 @@ impl Drawable {
     {
         let i = info;
 
-        match self {
-            Drawable::Color(_) => {
+        let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
+        let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
+        
+        font.draw_text(i.width, i.fgheight, &text, &fg, &mut bg)?;
 
-                let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
-                let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
-                
-                font.draw_text(i.width, i.fgheight, &text, &fg, &mut bg)?;
+        let fgx = i.x + (width_max - i.width) as i16 / 2;
 
-                let fgx = i.x + (width_max - i.width) as i16 / 2;
+        // Text
+        self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
 
-                // Text
-                self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
+        // Top and bottom borders
+        background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height)?;
+        background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height)?;
+        
+        // Left and right borders
+        background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
+        background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
 
-                // Top and bottom borders
-                background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _)?;
-                background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _)?;
-                
-                // Left and right borders
-                background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight)?;
-                background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight)?;
-
-                Ok(())
-            }
-        }
+        Ok(())
     }
 
 }

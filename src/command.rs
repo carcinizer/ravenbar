@@ -1,6 +1,9 @@
 
-use crate::config::config_dir;
 use std::time::Instant;
+
+use crate::config::config_dir;
+use crate::utils::human_readable;
+
 use sysinfo::{System, SystemExt as _, ProcessorExt as _};
 use serde_json::Value;
 
@@ -111,19 +114,6 @@ impl CommandGlobalInfo {
         let (_, total) = self.swap();
         common.color(total as f64) + &human_readable(total) + "B"
     }
-}
-
-// TODO przeniesc do jakiegos utils.rs czy cos
-pub fn human_readable(n: u64) -> String {
-    let (div, suffix) : (u64, &str) = 
-        if      n > (1 << 50) {(1 << 50, "Pi")}
-        else if n > (1 << 40) {(1 << 40, "Ti")}
-        else if n > (1 << 30) {(1 << 30, "Gi")}
-        else if n > (1 << 20) {(1 << 20, "Mi")}
-        else if n > (1 << 10) {(1 << 10, "Ki")}
-        else {(1, "")};
-
-    format!("{:.2}{}", n as f64 / div as f64, suffix)
 }
 
 #[derive(PartialEq, Clone)]

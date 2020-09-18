@@ -7,6 +7,7 @@ use std::error::Error;
 
 use unicode_normalization::UnicodeNormalization;
 use crate::draw::Color;
+use crate::utils::{mul_comp, mix_comp};
 
 
 pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
@@ -140,7 +141,7 @@ impl Font<'_> {
                         for i in 0..3 {
                             let fgformat = mul_comp(fg[arrpos+i], fgc.get(i));
                             let bgformat = mul_comp(bg[arrpos+i], bgc.get(i));
-                            bg[arrpos+i] = combine_comp(fgformat, bgformat, v);
+                            bg[arrpos+i] = mix_comp(bgformat, fgformat, v);
                         }
                     }
                 })
@@ -154,12 +155,4 @@ impl Font<'_> {
 
 fn scale(height: u16) -> Scale {
     Scale{x: height as f32, y: height as f32}
-}
-
-fn mul_comp(a: u8, b: u8) -> u8 {
-    ( a as u16 * b as u16 / 256 ) as u8
-}
-
-fn combine_comp(a: u8, b: u8, factor: f32) -> u8 {
-    (a as f32 * factor + b as f32 * (1.0 - factor)) as _
 }

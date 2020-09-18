@@ -12,6 +12,7 @@ mod command;
 mod props;
 mod event;
 mod draw;
+mod utils;
 
 use config::config_dir;
 use event::Event;
