@@ -1,6 +1,7 @@
 
 use std::error::Error;
 use std::fs::{OpenOptions, File};
+use std::io::Write;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -17,37 +18,12 @@ pub fn config_dir<'a>() -> std::path::PathBuf {
 }
 
 pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
-    // TODO put some examples folder
-    let default_json = json!({
-        
-        "alignment" : "NE",
-        "height" : 20,
-
-        "defaults" : {
-            "background": "#222233",
-            "background.on_hover": "#333344",
-
-            "foreground": "#FFFFFF"
-        },
-
-        "widgets" : [
-            {
-                "command": "date +%H:%M",
-                "command.on_hover": "date +%H:%M:%S", // TODO TEST?
-                "interval.on_hover": 0.2
-            },
-            {
-                "command": "echo This is a test"
-            }
-        ]
-    });
-
-    let cfg = OpenOptions::new()
+    let mut cfg = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(file)?;
 
-    to_writer_pretty(cfg, &default_json)?;
+    cfg.write(include_bytes!("../examples/default.json"))?;
     Ok(())
 }
 
