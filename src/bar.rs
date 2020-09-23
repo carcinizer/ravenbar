@@ -24,7 +24,6 @@ struct Widget {
     last_time_updated: Instant,
     last_event_updated: Event,
 
-    last_time_action: Instant,
     last_event_action: Event,
 
     last_x: i16,
@@ -65,7 +64,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     width_min: 0, width_max:0,
                     last_time_updated: Instant::now(),
                     last_event_updated: Event::Default,
-                    last_time_action: Instant::now(),
                     last_event_action: Event::Default,
                     last_x: 0, 
                     cmd_out: String::new(),
@@ -141,8 +139,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             }
 
             // Perform action
-            if force || i.last_time_action.elapsed().as_millis() > (props.interval * 1000.0) as u128
-                     || i.last_event_action != i.props.action.get_event(e,m) {
+            if force || i.last_event_action != i.props.action.get_event(e,m) {
                 props.action.execute(&mut self.cmdginfo);
             }
             
