@@ -4,7 +4,7 @@ use crate::props::*;
 use crate::window::*;
 use crate::event::Event;
 use crate::font::Font;
-use crate::command::CommandGlobalInfo;
+use crate::command::CommandSharedState;
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawFGInfo};
 
@@ -47,7 +47,7 @@ pub struct Bar<'a, T: XConnection> {
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
     font: Font<'a>,
-    cmdginfo: CommandGlobalInfo
+    cmdginfo: CommandSharedState
 }
 
 impl<'a, T: XConnection> Bar<'a, T> {
@@ -84,7 +84,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let mut bar = Self {props, widgets_left, widgets_right, window, font, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
-            cmdginfo: CommandGlobalInfo::new(),
+            cmdginfo: CommandSharedState::new(),
             default_bg: Drawable::from(cfg.default_bg)
         };
         bar.refresh(vec![Event::Default], true, 0, 0)?;

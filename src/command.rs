@@ -8,14 +8,14 @@ use sysinfo::{System, SystemExt as _, ProcessorExt as _};
 use serde_json::Value;
 
 
-pub struct CommandGlobalInfo {
+pub struct CommandSharedState {
     system: System,
     
     last_cpu: Option<Instant>,
     last_mem: Option<Instant>,
 }
 
-impl CommandGlobalInfo {
+impl CommandSharedState {
     pub fn new() -> Self {
         Self {
             system: sysinfo::System::new(),
@@ -215,7 +215,7 @@ impl Command {
         }
     }
 
-    pub fn execute(&self, gi: &mut CommandGlobalInfo) -> String {
+    pub fn execute(&self, gi: &mut CommandSharedState) -> String {
         match self {
             Self::Shell(s) => {
 
