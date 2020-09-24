@@ -1,19 +1,18 @@
 
-
-use std::collections::HashMap;
-use serde_json::Value;
-
-use serde::Deserialize;
-
 use crate::event::Event;
 use crate::command::*;
 use crate::window::Direction;
 use crate::draw::Drawable;
 
+use std::collections::HashMap;
+
+use serde_json::Value;
+use serde::Deserialize;
+
+
 pub struct Prop<T> {
     pub map: HashMap<Event, T>
 }
-
 
 impl<T> Prop<T> {
     pub fn get(&self, events: &Vec<Event>, mouse_inside: bool) -> &T {

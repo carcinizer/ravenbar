@@ -1,9 +1,9 @@
 
-use std::error::Error;
-
 use crate::window::{Window, XConnection};
 use crate::font::Font;
 use crate::utils::mix_comp;
+
+use std::error::Error;
 
 use x11rb::protocol::xproto::*;
 
@@ -13,6 +13,34 @@ pub struct Color {
     g: u8,
     b: u8,
     a: u8
+}
+
+#[derive(Clone, PartialEq)]
+pub enum Drawable {
+    Color(Color),
+    VGradient(Vec<Color>)
+}
+
+pub struct DrawFGInfo {
+    pub x: i16,
+    pub y: i16,
+    pub width: u16,
+    pub height: u16,
+    pub fgy: i16,
+    pub fgheight: u16,
+}
+
+impl DrawFGInfo {
+    
+    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
+       
+        let fgheight = (height as f32 * border_factor).ceil() as _;
+        let fgy = y + ((height - fgheight) / 2) as i16;
+        
+        let (_, width) = font.glyphs_and_width(text, fgheight);
+        
+        DrawFGInfo {x,y,width,height, fgy,fgheight}
+    }
 }
 
 impl Color {
@@ -119,34 +147,6 @@ impl Color {
         let b = mix_comp(self.b, other.b, factor);
         let a = mix_comp(self.a, other.a, factor);
         Self {r,g,b,a}
-    }
-}
-
-#[derive(Clone, PartialEq)]
-pub enum Drawable {
-    Color(Color),
-    VGradient(Vec<Color>)
-}
-
-pub struct DrawFGInfo {
-    pub x: i16,
-    pub y: i16,
-    pub width: u16,
-    pub height: u16,
-    pub fgy: i16,
-    pub fgheight: u16,
-}
-
-impl DrawFGInfo {
-    
-    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
-       
-        let fgheight = (height as f32 * border_factor).ceil() as _;
-        let fgy = y + ((height - fgheight) / 2) as i16;
-        
-        let (_, width) = font.glyphs_and_width(text, fgheight);
-        
-        DrawFGInfo {x,y,width,height, fgy,fgheight}
     }
 }
 

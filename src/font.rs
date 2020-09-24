@@ -1,85 +1,13 @@
 
-use fontconfig;
-use rusttype;
-use rusttype::{point, PositionedGlyph, Scale};
-
-use std::error::Error;
-
-use unicode_normalization::UnicodeNormalization;
 use crate::draw::Color;
 use crate::utils::{mul_comp, mix_comp};
 
+use std::error::Error;
 
-pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
-    chars: &'a mut T,
-    fg: Color,
-    bg: Color
-}
-
-impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T> 
-    where T: std::iter::Iterator<Item = char>
-{
-    type Item = (char, Color, Color);
-
-    fn next(&mut self) -> Option<Self::Item> {
-            
-        loop {
-            let first_opt = self.chars.next();
-            if let Some(first) = first_opt {
-                
-                // Escape code && CSI
-                if first == '\x1b' && self.chars.next() == Some('[') {
-
-                    let sgrstring = self.chars
-                        .take_while(|x| !x.is_alphabetic())
-                        .collect::<String>();
-
-                    let mut params = sgrstring
-                        .split(';')
-                        .map(|x| x.parse::<u32>().unwrap_or(0));
-                    
-                    let sgr = params.next().unwrap_or(0);
-                    let color = Color::from_sgr(sgr%10, &params.collect());
-
-                    let (fg,bg) = match sgr/10 {
-                        3   => (color, self.bg),
-                        9   => (color.bright(), self.bg),
-                        4   => (self.fg, color),
-                        10  => (self.fg, color.bright()),
-
-                        0 => if sgr == 0 {
-                                (Color::white(), Color::white())
-                             } 
-                             else {
-                                (self.fg, self.bg)
-                             },
-
-                        _ => (self.fg, self.bg)
-                    };
-                    self.fg = fg;
-                    self.bg = bg;
-                }
-                else if !first.is_control() {
-                    return Some((first, self.fg, self.bg));
-                }
-            }
-            else {
-                return None;
-            }
-        }
-    }
-}
-
-pub trait Formatted<T: std::iter::Iterator<Item = char>> {
-    fn formatted(&mut self) -> FormattedTextIter<'_, T>;
-}
-
-impl<T> Formatted<T> for T 
-    where T: std::iter::Iterator<Item = char> {
-    fn formatted(&mut self) -> FormattedTextIter<'_, T> {
-        FormattedTextIter { chars: self, fg: Color::white(), bg: Color::white() }
-    }
-}
+use fontconfig;
+use rusttype;
+use rusttype::{point, PositionedGlyph, Scale};
+use unicode_normalization::UnicodeNormalization;
 
 
 pub type FontConfig = fontconfig::Fontconfig;
@@ -156,3 +84,75 @@ impl Font<'_> {
 fn scale(height: u16) -> Scale {
     Scale{x: height as f32, y: height as f32}
 }
+
+pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
+    chars: &'a mut T,
+    fg: Color,
+    bg: Color
+}
+
+impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T> 
+    where T: std::iter::Iterator<Item = char>
+{
+    type Item = (char, Color, Color);
+
+    fn next(&mut self) -> Option<Self::Item> {
+            
+        loop {
+            let first_opt = self.chars.next();
+            if let Some(first) = first_opt {
+                
+                // Escape code && CSI
+                if first == '\x1b' && self.chars.next() == Some('[') {
+
+                    let sgrstring = self.chars
+                        .take_while(|x| !x.is_alphabetic())
+                        .collect::<String>();
+
+                    let mut params = sgrstring
+                        .split(';')
+                        .map(|x| x.parse::<u32>().unwrap_or(0));
+                    
+                    let sgr = params.next().unwrap_or(0);
+                    let color = Color::from_sgr(sgr%10, &params.collect());
+
+                    let (fg,bg) = match sgr/10 {
+                        3   => (color, self.bg),
+                        9   => (color.bright(), self.bg),
+                        4   => (self.fg, color),
+                        10  => (self.fg, color.bright()),
+
+                        0 => if sgr == 0 {
+                                (Color::white(), Color::white())
+                             } 
+                             else {
+                                (self.fg, self.bg)
+                             },
+
+                        _ => (self.fg, self.bg)
+                    };
+                    self.fg = fg;
+                    self.bg = bg;
+                }
+                else if !first.is_control() {
+                    return Some((first, self.fg, self.bg));
+                }
+            }
+            else {
+                return None;
+            }
+        }
+    }
+}
+
+pub trait Formatted<T: std::iter::Iterator<Item = char>> {
+    fn formatted(&mut self) -> FormattedTextIter<'_, T>;
+}
+
+impl<T> Formatted<T> for T 
+    where T: std::iter::Iterator<Item = char> {
+    fn formatted(&mut self) -> FormattedTextIter<'_, T> {
+        FormattedTextIter { chars: self, fg: Color::white(), bg: Color::white() }
+    }
+}
+

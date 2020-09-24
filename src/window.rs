@@ -48,6 +48,19 @@ pub struct Direction {
     pub ydir: i8
 }
 
+#[derive(Debug, PartialEq)]
+pub struct WindowGeometry {
+    pub dir: Direction,
+    pub xoff: i16,
+    pub yoff: i16,
+    pub w: u16,
+    pub h: u16,
+    pub solid: bool,
+    pub above: bool,
+    pub below: bool,
+    pub visible: bool,
+}
+
 impl Direction {
     pub fn from(s: String) -> Self {
         let ydir = match &s[0..1] {
@@ -66,18 +79,6 @@ impl Direction {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct WindowGeometry {
-    pub dir: Direction,
-    pub xoff: i16,
-    pub yoff: i16,
-    pub w: u16,
-    pub h: u16,
-    pub solid: bool,
-    pub above: bool,
-    pub below: bool,
-    pub visible: bool,
-}
 
 impl WindowGeometry {
     pub fn new() -> Self {

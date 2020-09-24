@@ -1,6 +1,5 @@
 
 use crate::props::*;
-
 use crate::window::*;
 use crate::event::Event;
 use crate::font::Font;
@@ -9,9 +8,6 @@ use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawFGInfo};
 
 use std::time::Instant;
-use std::collections::HashMap;
-use std::path::PathBuf;
-
 
 struct Widget {
     props : WidgetProps,
@@ -204,7 +200,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
             dir: *self.props.alignment.get(e,false), 
             solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
-        println!("a{:?}\nb{:?}", self.geometry, self.fake_geometry);
         
         let global_redraw = if next_geom != self.geometry {
             self.geometry = next_geom;

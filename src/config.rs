@@ -1,13 +1,14 @@
 
+use crate::props::{BarConfigWidgetProps, BarConfigProps};
+
 use std::error::Error;
 use std::fs::{OpenOptions, File};
 use std::io::Write;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde_json::{Value, json, from_reader, from_value, to_writer_pretty, Map};
+use serde_json::{Value, from_reader, from_value, Map};
 
-use crate::props::{BarConfigWidgetProps, BarConfigProps};
 extern crate dirs;
 
 pub fn config_dir<'a>() -> std::path::PathBuf {
@@ -115,59 +116,30 @@ impl BarConfig {
                                 .unwrap()) 
                         ).collect();
 
-        let mut create_widgets = |widget_arr: &Vec<Value>| widget_arr
+        let create_widgets = |widget_arr: &Vec<Value>| widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
-                            /*
-                            // Mix props for the current event template
-                            for (k, p) in widget.props.iter_mut() {
-                                let tname = widget.template
-                                        .entry(k.to_owned())
-                                        .or_default();
-                                
-                                match templates.get(tname) {
-                                    Some(t) => {p.mix(t.props.get(&k.to_owned())
-                                                 .unwrap_or(&BarConfigWidgetProps::default()));},
-                                    None => panic!("Template '{}' doesn't exist", tname)
-                                }
-                            }
-                            
-                            // Mix props for the default event template
-                            for (k, p) in widget.props.iter_mut() {
-                                let tname = widget.template
-                                        .entry(("default".to_string(), "".to_string()))
-                                        .or_default();
 
-                                match templates.get(tname) {
-                                    Some(t) => {p.mix(t.props.get(&k.to_owned())
-                                                 .unwrap_or(&BarConfigWidgetProps::default()));},
-                                    None => panic!("Template '{}' doesn't exist", tname)
-                                }
-                            }
-                            */
+                            // Mix with current template
                             for (k, name) in widget.template.clone().iter() {
                                 match templates.get(name) {
-                                    Some(t) => {println!("Mixing {:?} {:?}", k, name);widget.mix(t, Some(k));},
+                                    Some(t) => {widget.mix(t, Some(k));},
                                     None => panic!("Template '{}' doesn't exist", name)
                                 }
                             }
 
+                            // Mix with default template
                             let default_default_template = &String::new();
                             let default_template = widget.template
                                 .get(&("default".to_string(), "".to_string()))
                                 .unwrap_or(default_default_template);
 
                             match templates.get(default_template) {
-                                Some(t) => {println!("Mixing {:?}", default_template);widget.mix(t, None);},
+                                Some(t) => {widget.mix(t, None);},
                                 None => panic!("Template '{}' doesn't exist", default_template)
                             }
-                            // Mix events from the 'defaults' section
-                            /* for (k, p) in default_widget.props.iter() {
-                                match widget.props.get_mut(k) {
-                                    Some(pm) => {pm.mix(default_widget.props.get(&k.to_owned()).unwrap_or(&BarConfigWidgetProps::default()));}
-                                    None => {widget.props.insert(k.to_owned(), p.to_owned());}
-                                }
-                            }*/
+
+                            // Mix with 'defaults' section
                             widget.mix(&default_widget, None);
 
                             widget

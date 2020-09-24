@@ -1,6 +1,7 @@
 
-use x11rb::protocol::Event as XEvent;
 use crate::config::config_dir;
+
+use x11rb::protocol::Event as XEvent;
 
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum Event {

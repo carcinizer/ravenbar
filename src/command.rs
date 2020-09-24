@@ -1,8 +1,8 @@
 
-use std::time::Instant;
-
 use crate::config::config_dir;
 use crate::utils::human_readable;
+
+use std::time::Instant;
 
 use sysinfo::{System, SystemExt as _, ProcessorExt as _};
 use serde_json::Value;
@@ -15,134 +15,11 @@ pub struct CommandSharedState {
     last_mem: Option<Instant>,
 }
 
-impl CommandSharedState {
-    pub fn new() -> Self {
-        Self {
-            system: sysinfo::System::new(),
-
-            last_cpu: None,
-            last_mem: None,
-        }
-    }
-    
-    fn refresh_cpu(&mut self) {
-        let update = if let Some(i) = self.last_cpu {
-            i.elapsed().as_millis() > 30
-        }
-        else {true};
-
-        if update {
-            self.system.refresh_cpu();
-            self.last_cpu = Some(Instant::now()); 
-        }
-    }
-
-    fn refresh_mem(&mut self) {
-        let update = if let Some(i) = self.last_mem {
-            i.elapsed().as_millis() > 30
-        }
-        else {true};
-
-        if update {
-            self.system.refresh_memory();
-            self.last_mem = Some(Instant::now()); 
-        }
-    }
-
-    fn cpu(&mut self, core: &Option<usize>) -> &sysinfo::Processor {
-        self.refresh_cpu();
-        
-        match core {
-            Some(c) => {
-                let a = self.system.get_processors();
-                if a.len() <= *c {panic!("CPU doesn't have core {}", c)};
-                &a[*c]
-            }
-            None => self.system.get_global_processor_info()
-        }
-    }
-
-    fn mem(&mut self) -> (u64, u64) {
-        self.refresh_mem();
-        (self.system.get_used_memory() * 1000, self.system.get_total_memory() * 1000)
-    }
-
-    fn swap(&mut self) -> (u64, u64) {
-        self.refresh_mem();
-        (self.system.get_used_swap() * 1000, self.system.get_total_swap() * 1000)
-    }
-
-    fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
-        let usage = self.cpu(core).get_cpu_usage();
-        format!("{}{:.0}%", common.color(usage), usage)
-    }
-
-    fn cpu_freq(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
-        // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
-        let freq = self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32;
-        format!("{}{:.2}GHz", common.color(freq), freq / 1000.0)
-    }
-
-    fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, _) = self.mem();
-        common.color(usage as f64) + &human_readable(usage) + "B"
-    }
-
-    fn mem_percent(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, total) = self.mem();
-        let percent = usage as f64 / total as f64 * 100.;
-        format!("{}{:.2}%", common.color(percent) ,percent)
-    }
-
-    fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
-        let (_, total) = self.mem();
-        common.color(total as f64) + &human_readable(total) + "B"
-    }
-
-    fn swap_usage(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, _) = self.swap();
-        common.color(usage as f64) + &human_readable(usage) + "B"
-    }
-
-    fn swap_percent(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, total) = self.swap();
-        let percent = usage as f64 / total as f64 * 100.;
-        format!("{}{:.2}%", common.color(percent) ,percent)
-    }
-
-    fn swap_total(&mut self, common: &InternalCommandCommon) -> String {
-        let (_, total) = self.swap();
-        common.color(total as f64) + &human_readable(total) + "B"
-    }
-}
-
 #[derive(PartialEq, Clone)]
 pub struct InternalCommandCommon {
     warn: Option<f64>,
     critical: Option<f64>,
     dim: Option<f64>
-}
-
-impl InternalCommandCommon {
-    fn color(&self, n: impl Into<f64>) -> String {
-        let n = n.into();
-        if n >= self.critical.unwrap_or(f64::MAX) {
-            // Red
-            "\x1b[31m".to_owned()
-        }
-        else if n >= self.warn.unwrap_or(f64::MAX) {
-            // Yellow
-            "\x1b[33m".to_owned()
-        }
-        else if n >= self.dim.unwrap_or(f64::MIN) {
-            // Default
-            "".to_owned()
-        }
-        else {
-            // Gray
-            "\x1b[90m".to_owned()
-        }
-    }
 }
 
 #[derive(PartialEq, Clone)]
@@ -275,6 +152,129 @@ impl Command {
                                .collect::<Vec<String>>()
                                .join(""),
             Self::None => String::new(),
+        }
+    }
+}
+
+impl CommandSharedState {
+    pub fn new() -> Self {
+        Self {
+            system: sysinfo::System::new(),
+
+            last_cpu: None,
+            last_mem: None,
+        }
+    }
+    
+    fn refresh_cpu(&mut self) {
+        let update = if let Some(i) = self.last_cpu {
+            i.elapsed().as_millis() > 30
+        }
+        else {true};
+
+        if update {
+            self.system.refresh_cpu();
+            self.last_cpu = Some(Instant::now()); 
+        }
+    }
+
+    fn refresh_mem(&mut self) {
+        let update = if let Some(i) = self.last_mem {
+            i.elapsed().as_millis() > 30
+        }
+        else {true};
+
+        if update {
+            self.system.refresh_memory();
+            self.last_mem = Some(Instant::now()); 
+        }
+    }
+
+    fn cpu(&mut self, core: &Option<usize>) -> &sysinfo::Processor {
+        self.refresh_cpu();
+        
+        match core {
+            Some(c) => {
+                let a = self.system.get_processors();
+                if a.len() <= *c {panic!("CPU doesn't have core {}", c)};
+                &a[*c]
+            }
+            None => self.system.get_global_processor_info()
+        }
+    }
+
+    fn mem(&mut self) -> (u64, u64) {
+        self.refresh_mem();
+        (self.system.get_used_memory() * 1000, self.system.get_total_memory() * 1000)
+    }
+
+    fn swap(&mut self) -> (u64, u64) {
+        self.refresh_mem();
+        (self.system.get_used_swap() * 1000, self.system.get_total_swap() * 1000)
+    }
+
+    fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
+        let usage = self.cpu(core).get_cpu_usage();
+        format!("{}{:.0}%", common.color(usage), usage)
+    }
+
+    fn cpu_freq(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
+        // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
+        let freq = self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32;
+        format!("{}{:.2}GHz", common.color(freq), freq / 1000.0)
+    }
+
+    fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, _) = self.mem();
+        common.color(usage as f64) + &human_readable(usage) + "B"
+    }
+
+    fn mem_percent(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, total) = self.mem();
+        let percent = usage as f64 / total as f64 * 100.;
+        format!("{}{:.2}%", common.color(percent) ,percent)
+    }
+
+    fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
+        let (_, total) = self.mem();
+        common.color(total as f64) + &human_readable(total) + "B"
+    }
+
+    fn swap_usage(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, _) = self.swap();
+        common.color(usage as f64) + &human_readable(usage) + "B"
+    }
+
+    fn swap_percent(&mut self, common: &InternalCommandCommon) -> String {
+        let (usage, total) = self.swap();
+        let percent = usage as f64 / total as f64 * 100.;
+        format!("{}{:.2}%", common.color(percent) ,percent)
+    }
+
+    fn swap_total(&mut self, common: &InternalCommandCommon) -> String {
+        let (_, total) = self.swap();
+        common.color(total as f64) + &human_readable(total) + "B"
+    }
+}
+
+impl InternalCommandCommon {
+    fn color(&self, n: impl Into<f64>) -> String {
+        let n = n.into();
+        if n >= self.critical.unwrap_or(f64::MAX) {
+            // Red
+            "\x1b[31m".to_owned()
+        }
+        else if n >= self.warn.unwrap_or(f64::MAX) {
+            // Yellow
+            "\x1b[33m".to_owned()
+        }
+        else if n >= self.dim.unwrap_or(f64::MIN) {
+            // Default
+            "".to_owned()
+        }
+        else {
+            // Gray
+            "\x1b[90m".to_owned()
         }
     }
 }

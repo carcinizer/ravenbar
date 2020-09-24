@@ -1,9 +1,4 @@
 
-use std::error::Error;
-
-use x11rb::connection::Connection;
-use structopt::StructOpt;
-
 mod bar;
 mod font;
 mod config;
@@ -16,6 +11,11 @@ mod utils;
 
 use config::config_dir;
 use event::Event;
+
+use std::error::Error;
+
+use x11rb::connection::Connection;
+use structopt::StructOpt;
 
 #[derive(StructOpt)]
 #[structopt()]
