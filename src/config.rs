@@ -29,7 +29,8 @@ pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
 
 #[derive(Debug)]
 pub struct BarConfigWidget {
-    pub props: HashMap<(String, String), BarConfigWidgetProps>
+    pub props: HashMap<(String, String), BarConfigWidgetProps>,
+    pub template: HashMap<(String, String), String>
 }
 
 #[derive(Debug)]
@@ -53,6 +54,10 @@ impl BarConfig {
         let mut widget_left_arr = Vec::<Value>::new();
         let mut widget_right_arr = Vec::<Value>::new();
         let mut font = String::from("Monospace");
+        let mut templates = HashMap::<String, BarConfigWidget>::new();
+        
+        // Insert the 'default' template
+        templates.insert("".to_string(), BarConfigWidget::new());
 
         let values : Value = from_reader(file)?;
 
@@ -66,6 +71,12 @@ impl BarConfig {
                             panic!("Events are unapplicable to 'defaults' section");
                         }
                         default_widget = BarConfigWidget::create(val)?;
+                    }
+                    "template" => {
+                        match templates.insert(event.clone(), BarConfigWidget::create(val)?) {
+                            None => (),
+                            Some(_) => panic!("Template '{}' already exists", event)
+                        }
                     }
                     "widgets_left" => {
                         if let Value::Array(arr) = val {
@@ -107,18 +118,58 @@ impl BarConfig {
         let mut create_widgets = |widget_arr: &Vec<Value>| widget_arr
                         .iter().map(|v| {
                             let mut widget = BarConfigWidget::create(v).unwrap();
-                            
-                            // Add the rest of events that exist in 'defaults'
-                            // section but not in the widget
-                            for (k, p) in default_widget.props.iter() {
-                                if let None = widget.props.get(k) {
-                                    widget.props.insert(k.to_owned(), p.to_owned());
+                            /*
+                            // Mix props for the current event template
+                            for (k, p) in widget.props.iter_mut() {
+                                let tname = widget.template
+                                        .entry(k.to_owned())
+                                        .or_default();
+                                
+                                match templates.get(tname) {
+                                    Some(t) => {p.mix(t.props.get(&k.to_owned())
+                                                 .unwrap_or(&BarConfigWidgetProps::default()));},
+                                    None => panic!("Template '{}' doesn't exist", tname)
                                 }
                             }
-                            // Mix props with those from 'defaults' section for each event
+                            
+                            // Mix props for the default event template
                             for (k, p) in widget.props.iter_mut() {
-                                p.mix(default_widget.props.entry(k.to_owned()).or_default());
+                                let tname = widget.template
+                                        .entry(("default".to_string(), "".to_string()))
+                                        .or_default();
+
+                                match templates.get(tname) {
+                                    Some(t) => {p.mix(t.props.get(&k.to_owned())
+                                                 .unwrap_or(&BarConfigWidgetProps::default()));},
+                                    None => panic!("Template '{}' doesn't exist", tname)
+                                }
                             }
+                            */
+                            for (k, name) in widget.template.clone().iter() {
+                                match templates.get(name) {
+                                    Some(t) => {println!("Mixing {:?} {:?}", k, name);widget.mix(t, Some(k));},
+                                    None => panic!("Template '{}' doesn't exist", name)
+                                }
+                            }
+
+                            let default_default_template = &String::new();
+                            let default_template = widget.template
+                                .get(&("default".to_string(), "".to_string()))
+                                .unwrap_or(default_default_template);
+
+                            match templates.get(default_template) {
+                                Some(t) => {println!("Mixing {:?}", default_template);widget.mix(t, None);},
+                                None => panic!("Template '{}' doesn't exist", default_template)
+                            }
+                            // Mix events from the 'defaults' section
+                            /* for (k, p) in default_widget.props.iter() {
+                                match widget.props.get_mut(k) {
+                                    Some(pm) => {pm.mix(default_widget.props.get(&k.to_owned()).unwrap_or(&BarConfigWidgetProps::default()));}
+                                    None => {widget.props.insert(k.to_owned(), p.to_owned());}
+                                }
+                            }*/
+                            widget.mix(&default_widget, None);
+
                             widget
                         }).collect();
         
@@ -149,27 +200,53 @@ impl BarConfig {
 
 impl BarConfigWidget {
     fn new() -> Self {
-        Self { props: HashMap::new() }
+        Self { props: HashMap::<(String, String), BarConfigWidgetProps>::new(), template: HashMap::new() }
     }
 
     fn create(obj: &Value) -> Result<Self, serde_json::Error> {
 
         let mut widget_props_proto: HashMap<(String, String), Map<String, Value>> = HashMap::new();
+        let mut template: HashMap<(String, String), String> = HashMap::new();
 
         if let Value::Object(values) = obj {
             for (key, val) in values {
                 let (prop, event, settings) = split_key(key);
                 
-                widget_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
+                if prop == "template" {
+                    match val {
+                        Value::String(s) => {template.insert((event, settings), s.to_owned());},
+                        _ => {panic!("Template name must be a string");}
+                    }
+                } else {
+                    widget_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
+                }
+
             }
 
             Ok(Self { 
                 props: widget_props_proto
-                        .iter().map(|(k,v)| 
+                        .iter().map(|(k,v) : (&(String, String), &Map<String, Value>)| 
                             (k.clone(), from_value(Value::Object(v.clone())).unwrap()) 
-                        ).collect() })
+                        ).collect::<HashMap<(String, String), BarConfigWidgetProps>>(),
+                template
+            })
         }
         else {panic!("Widget must be an object")} //TODO Error handling
+    }
+
+    fn mix(&mut self, other: &Self, filter: Option<&(String, String)>) -> &mut Self{
+        for (k, p) in other.props.iter()
+            .filter(|(k,_)| match filter {
+                Some(s) => *k == s,
+                None => true
+            }) 
+        {
+            match self.props.get_mut(k) {
+                Some(pm) => {pm.mix(p);}
+                None => {self.props.insert(k.to_owned(), p.to_owned());}
+            }
+        }
+        self
     }
 }
 
