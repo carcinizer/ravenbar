@@ -42,6 +42,7 @@ pub struct Bar<'a, T: XConnection> {
 
     current: BarPropsCurrent,
 
+    offset: i16,
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
@@ -83,7 +84,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdginfo: CommandSharedState::new(),
-            default_bg: Drawable::from(cfg.default_bg)
+            default_bg: Drawable::from(cfg.default_bg),
+            offset: 0
         };
         bar.refresh(vec![Event::Default], true, 0, 0)?;
         Ok(bar)
@@ -94,6 +96,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         events: &Vec<Event>, 
         force: bool, 
         bar_redraw: bool, 
+        offset: i16,
         mx: i16, my: i16) -> i16 
     {
         let mut widget_cursor = 0;
@@ -111,8 +114,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             // Determine if mouse is inside widget
             let m = self.fake_geometry
-                .cropped(widget_cursor, 0, i.width_max, height)
-                .has_point(mx, my, self.window.screen_width(), self.window.screen_height());
+                .has_point_cropped(mx, my, self.window.screen_width(), self.window.screen_height(),
+                                   i.last_x + offset, 0, i.width_max, height);
 
             // Get widget props and determine whether they changed
             let new_current = i.props.as_current(e,m);
@@ -177,15 +180,15 @@ impl<'a, T: XConnection> Bar<'a, T> {
         }
         else {false};
 
-        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, mx, my);
-        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, mx, my);
+        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, 0, mx, my);
+        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, self.offset, mx, my);
 
         let bar = &self.current;
         let height = bar.height;
 
         let minwidth = (self.window.screen_width() as f32 * bar.screenwidth) as i16;
         let width = minwidth.max(width_left + width_right);
-        let offset = width - width_right;
+        self.offset = width - width_right;
 
         // Recalculate geometry
         let next_geom = WindowGeometry {
@@ -201,6 +204,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             dir: *self.props.alignment.get(e,false), 
             solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
+        println!("a{:?}\nb{:?}", self.geometry, self.fake_geometry);
         
         let global_redraw = if next_geom != self.geometry {
             self.geometry = next_geom;
@@ -224,13 +228,13 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets_right.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                i.current.foreground.draw_all(self.window, &i.drawinfo, offset, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+                i.current.foreground.draw_all(self.window, &i.drawinfo, self.offset, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
         // Draw background between widget chunks
-        self.default_bg.draw_bg(self.window, width_left, 0, (offset - width_left) as u16, height, height)?;
+        self.default_bg.draw_bg(self.window, width_left, 0, (self.offset - width_left) as u16, height, height)?;
 
         self.window.flush()?;
 

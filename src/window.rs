@@ -40,7 +40,7 @@ pub struct Window<'a, T: XConnection> {
     atoms: Atoms
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Direction {
     // -1 - left, 0 - center, 1 - right
     pub xdir: i8,
@@ -66,7 +66,7 @@ impl Direction {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct WindowGeometry {
     pub dir: Direction,
     pub xoff: i16,
@@ -97,26 +97,15 @@ impl WindowGeometry {
         (x,y,width,height)
     }
 
-    pub fn cropped(&self, x: i16, y: i16, w: u16, h: u16) -> Self {
-        let xoff = match self.dir.xdir {
-            0  => self.xoff + x,
-            -1 => self.xoff.abs() + x,
-            1  => self.xoff.abs() - x + self.w as i16 - w as i16,
-            _  => panic!("You weren't supposed to see this error")
-        };
-        let yoff = match self.dir.ydir {
-            0  => self.yoff + y,
-            -1 => self.yoff.abs() + y,
-            1  => self.yoff.abs() - y + self.h as i16 - h as i16,
-            _  => panic!("You weren't supposed to see this error")
-        };
-
-        Self {xoff, yoff, w, h, ..*self}
-    }
-
     pub fn has_point(&self, px: i16, py: i16, scrw: u16, scrh: u16) -> bool {
         let (x,y,w,h) = self.on_screen(scrw, scrh);
-        px >= x && py >= y && px <= x + w as i16 && py <= y + h as i16
+        px >= x && py >= y && px < x + w as i16 && py < y + h as i16
+    }
+
+    pub fn has_point_cropped(&self, px: i16, py: i16, scrw: u16, scrh: u16,
+                                    cx: i16, cy: i16, cw: u16, ch: u16) -> bool {
+        let (x,y,_,_) = self.on_screen(scrw, scrh);
+        px >= x + cx && py >= y + cy && px < x + cx + cw as i16 && py < y + cy + ch as i16
     }
 
     fn strut(&self) -> [u32; 12] {
