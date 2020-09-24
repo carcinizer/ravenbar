@@ -149,6 +149,8 @@ impl InternalCommandCommon {
 pub enum Command{
     None,
     Shell(String),
+    Literal(String),
+    Array(Vec<Command>),
     
     CPUUsage(Option<usize>, InternalCommandCommon),
     CPUFreq(Option<usize>, InternalCommandCommon),
@@ -167,10 +169,16 @@ impl Command {
         match v {
             Value::String(s) => {
                 match s.chars().find(|x| !x.is_whitespace()) {
-                    Some(_) => Self::Shell(s),
+                    Some(c) => match c {
+                        '#' => Self::Literal(s.chars().skip_while(|x| x.is_whitespace() || *x == '#').collect()),
+                        _ => Self::Shell(s)
+                    }
                     None => Self::None
                 }
             }
+            Value::Array(v) => Self::Array(v.iter()
+                                            .map(|s| Command::from(s.to_owned()))
+                                            .collect()),
             Value::Object(obj) => {
                 if let Some(Value::String(t)) = obj.get("type") {
 
@@ -211,7 +219,7 @@ impl Command {
                     panic!("'type' property of command must exist if it's an object");
                 }
             }
-            _ => panic!("'command' must be either a string or an object with a required value 'type'")
+            _ => panic!("'command' must be either a string, an object with a required value 'type' or an array of those")
         }
     }
 
@@ -261,6 +269,11 @@ impl Command {
             Self::SwapTotal(common) => {
                 gi.swap_total(common)
             }
+            Self::Literal(s) => s.clone(),
+            Self::Array(v) => v.iter()
+                               .map(|c| c.execute(gi))
+                               .collect::<Vec<String>>()
+                               .join(""),
             Self::None => String::new(),
         }
     }
