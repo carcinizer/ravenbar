@@ -1,10 +1,10 @@
 
 use crate::config::config_dir;
-use crate::utils::human_readable;
+use crate::utils::{human_readable, human_readable_p10};
 
 use std::time::Instant;
 
-use sysinfo::{System, SystemExt as _, ProcessorExt as _};
+use sysinfo::{System, SystemExt as _, ProcessorExt as _, NetworkExt};
 use serde_json::Value;
 
 
@@ -13,6 +13,8 @@ pub struct CommandSharedState {
     
     last_cpu: Option<Instant>,
     last_mem: Option<Instant>,
+    last_net: Option<Instant>,
+    net_update_time: f32
 }
 
 #[derive(PartialEq, Clone)]
@@ -23,7 +25,24 @@ pub struct InternalCommandCommon {
 }
 
 #[derive(PartialEq, Clone)]
-pub enum Command{
+pub enum NetStatType {
+    Download,
+    Upload,
+    DownloadPackets,
+    UploadPackets,
+    DownloadErrors,
+    UploadErrors,
+
+    DownloadTotal,
+    UploadTotal,
+    DownloadPacketsTotal,
+    UploadPacketsTotal,
+    DownloadErrorsTotal,
+    UploadErrorsTotal,
+}
+
+#[derive(PartialEq, Clone)]
+pub enum Command {
     None,
     Shell(String),
     Literal(String),
@@ -39,6 +58,9 @@ pub enum Command{
     SwapUsage(InternalCommandCommon),
     SwapPercent(InternalCommandCommon),
     SwapTotal(InternalCommandCommon),
+
+    NetStats(NetStatType, Option<String>, InternalCommandCommon),
+    NetStatsPerSecond(NetStatType, Option<String>, InternalCommandCommon)
 }
 
 impl Command {
@@ -77,6 +99,12 @@ impl Command {
                         dim: get_number("dim")
                     };
 
+                    let network = match obj.get("network_name") {
+                        Some(Value::String(s)) => Some(s.to_owned()),
+                        Some(_) => panic!("network_name must be a string"),
+                        None => None
+                    };
+
                     match &t[..] {
                         "cpu_usage" => Self::CPUUsage(core, common),
                         "cpu_freq" => Self::CPUFreq(core, common),
@@ -88,6 +116,27 @@ impl Command {
                         "swap_usage" => Self::SwapUsage(common),
                         "swap_percent" => Self::SwapPercent(common),
                         "swap_total" => Self::SwapTotal(common),
+
+                        "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network, common),
+                        "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network, common),
+                        "net_download_packets" =>       Self::NetStatsPerSecond(NetStatType::DownloadPackets, network, common),
+                        "net_upload_packets" =>         Self::NetStatsPerSecond(NetStatType::UploadPackets, network, common),
+                        "net_download_errors" =>        Self::NetStatsPerSecond(NetStatType::DownloadErrors, network, common),
+                        "net_upload_errors" =>          Self::NetStatsPerSecond(NetStatType::UploadErrors, network, common),
+
+                        "net_download_since" =>         Self::NetStats(NetStatType::Download, network, common),
+                        "net_upload_since" =>           Self::NetStats(NetStatType::Upload, network, common),
+                        "net_download_packets_since" => Self::NetStats(NetStatType::DownloadPackets, network, common),
+                        "net_upload_packets_since" =>   Self::NetStats(NetStatType::UploadPackets, network, common),
+                        "net_download_errors_since" =>  Self::NetStats(NetStatType::DownloadErrors, network, common),
+                        "net_upload_errors_since" =>    Self::NetStats(NetStatType::UploadErrors, network, common),
+
+                        "net_download_total" =>         Self::NetStats(NetStatType::DownloadTotal, network, common),
+                        "net_upload_total" =>           Self::NetStats(NetStatType::UploadTotal, network, common),
+                        "net_download_packets_total" => Self::NetStats(NetStatType::DownloadPacketsTotal, network, common),
+                        "net_upload_packets_total" =>   Self::NetStats(NetStatType::UploadPacketsTotal, network, common),
+                        "net_download_errors_total" =>  Self::NetStats(NetStatType::DownloadErrorsTotal, network, common),
+                        "net_upload_errors_total" =>    Self::NetStats(NetStatType::UploadErrorsTotal, network, common),
 
                         _ => {panic!("Command type '{}' not available", t)}
                     }
@@ -146,6 +195,12 @@ impl Command {
             Self::SwapTotal(common) => {
                 gi.swap_total(common)
             }
+            Self::NetStats(stat, name, common) => {
+                gi.net_stats(stat, name, common)
+            }
+            Self::NetStatsPerSecond(stat, name, common) => {
+                gi.net_stats_per_second(stat, name, common)
+            }
             Self::Literal(s) => s.clone(),
             Self::Array(v) => v.iter()
                                .map(|c| c.execute(gi))
@@ -159,10 +214,13 @@ impl Command {
 impl CommandSharedState {
     pub fn new() -> Self {
         Self {
-            system: sysinfo::System::new(),
+            system: sysinfo::System::new_all(),
 
             last_cpu: None,
             last_mem: None,
+            last_net: None,
+            
+            net_update_time: f32::MAX
         }
     }
     
@@ -189,6 +247,21 @@ impl CommandSharedState {
             self.last_mem = Some(Instant::now()); 
         }
     }
+
+    fn refresh_net(&mut self) {
+        let update = if let Some(i) = self.last_net {
+            i.elapsed().as_millis() > 30
+        }
+        else {true};
+
+        if update {
+            self.system.refresh_networks();
+            self.net_update_time = self.last_net.unwrap_or(Instant::now())
+                                       .elapsed().as_millis() as f32 / 1000.0;
+            self.last_net = Some(Instant::now()); 
+        }
+    }
+
 
     fn cpu(&mut self, core: &Option<usize>) -> &sysinfo::Processor {
         self.refresh_cpu();
@@ -255,6 +328,45 @@ impl CommandSharedState {
         let (_, total) = self.swap();
         common.color(total as f64) + &human_readable(total) + "B"
     }
+
+    fn net_stats_raw(&mut self, stat: &NetStatType, name: &Option<String>) -> Option<u64> {
+        self.refresh_net();
+
+        let (mut total, mut present) = (0, false);
+        for (netname, network) in self.system.get_networks() {
+            let count = match name {
+                Some(n) => n == netname,
+                None => true
+            };
+
+            if count {
+                total += stat.get_from(network);
+                present = true;
+            }
+        }
+
+        match present {
+            true => Some(total),
+            false => None
+        }
+    }
+
+    fn net_stats(&mut self, stat: &NetStatType, name: &Option<String>, common: &InternalCommandCommon) -> String {
+        let total = self.net_stats_raw(stat, name);
+        match total {
+            Some(t) => format!("{}{}", common.color(t as f64), stat.human_readable(t)),
+            None => "???".to_string()
+        }
+    }
+
+    fn net_stats_per_second(&mut self, stat: &NetStatType, name: &Option<String>, common: &InternalCommandCommon) -> String {
+        let total = self.net_stats_raw(stat, name);
+        match total {
+            Some(t) => format!("{}{}/s", common.color(t as f32 / self.net_update_time), 
+                                       stat.human_readable((t as f32 / self.net_update_time) as u64)),
+            None => "???".to_string()
+        }
+    }
 }
 
 impl InternalCommandCommon {
@@ -279,3 +391,32 @@ impl InternalCommandCommon {
     }
 }
 
+impl NetStatType {
+    fn get_from(&self, n: &impl NetworkExt) -> u64 {
+        match self {
+            Self::Download => n.get_received(),
+            Self::Upload => n.get_transmitted(),
+            Self::DownloadPackets => n.get_packets_received(),
+            Self::UploadPackets => n.get_packets_transmitted(),
+            Self::DownloadErrors => n.get_errors_on_received(),
+            Self::UploadErrors => n.get_errors_on_transmitted(),
+
+            Self::DownloadTotal => n.get_total_received(),
+            Self::UploadTotal => n.get_total_transmitted(),
+            Self::DownloadPacketsTotal => n.get_total_packets_received(),
+            Self::UploadPacketsTotal => n.get_total_packets_transmitted(),
+            Self::DownloadErrorsTotal => n.get_total_errors_on_received(),
+            Self::UploadErrorsTotal => n.get_total_errors_on_transmitted(),
+        }
+    }
+
+    fn human_readable(&self, n: u64) -> String {
+        match self {
+            Self::Download      => human_readable(n) + "B",
+            Self::Upload        => human_readable(n) + "B",
+            Self::DownloadTotal => human_readable(n) + "B",
+            Self::UploadTotal   => human_readable(n) + "B",
+            _ => human_readable_p10(n),
+        }
+    }
+}
