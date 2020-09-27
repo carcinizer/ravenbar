@@ -4,7 +4,7 @@ use crate::utils::{human_readable, human_readable_p10};
 
 use std::time::Instant;
 
-use sysinfo::{System, SystemExt as _, ProcessorExt as _, NetworkExt};
+use sysinfo::{System, SystemExt as _, ProcessorExt as _, NetworkExt, DiskExt as _};
 use serde_json::Value;
 
 
@@ -14,6 +14,7 @@ pub struct CommandSharedState {
     last_cpu: Option<Instant>,
     last_mem: Option<Instant>,
     last_net: Option<Instant>,
+    last_disks: Option<Instant>,
     net_update_time: f32
 }
 
@@ -59,6 +60,10 @@ pub enum Command {
     SwapPercent(InternalCommandCommon),
     SwapTotal(InternalCommandCommon),
 
+    DiskUsage(String, InternalCommandCommon),
+    DiskPercent(String, InternalCommandCommon),
+    DiskTotal(String, InternalCommandCommon),
+    
     NetStats(NetStatType, Option<String>, InternalCommandCommon),
     NetStatsPerSecond(NetStatType, Option<String>, InternalCommandCommon)
 }
@@ -105,6 +110,12 @@ impl Command {
                         None => None
                     };
 
+                    let mountpoint = match obj.get("mountpoint") {
+                        Some(Value::String(s)) => s.to_owned(),
+                        Some(_) => panic!("mountpoint must be a string"),
+                        None => "ERR".to_string()
+                    };
+
                     match &t[..] {
                         "cpu_usage" => Self::CPUUsage(core, common),
                         "cpu_freq" => Self::CPUFreq(core, common),
@@ -116,6 +127,10 @@ impl Command {
                         "swap_usage" => Self::SwapUsage(common),
                         "swap_percent" => Self::SwapPercent(common),
                         "swap_total" => Self::SwapTotal(common),
+                        
+                        "disk_usage" => Self::DiskUsage(mountpoint, common),
+                        "disk_percent" => Self::DiskPercent(mountpoint, common),
+                        "disk_total" => Self::DiskTotal(mountpoint, common),
 
                         "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network, common),
                         "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network, common),
@@ -195,6 +210,15 @@ impl Command {
             Self::SwapTotal(common) => {
                 gi.swap_total(common)
             }
+            Self::DiskUsage(mnt, common) => {
+                gi.disk_usage(mnt, common)
+            }
+            Self::DiskPercent(mnt, common) => {
+                gi.disk_percent(mnt, common)
+            }
+            Self::DiskTotal(mnt, common) => {
+                gi.disk_total(mnt, common)
+            }
             Self::NetStats(stat, name, common) => {
                 gi.net_stats(stat, name, common)
             }
@@ -219,6 +243,7 @@ impl CommandSharedState {
             last_cpu: None,
             last_mem: None,
             last_net: None,
+            last_disks: None,
             
             net_update_time: f32::MAX
         }
@@ -262,6 +287,17 @@ impl CommandSharedState {
         }
     }
 
+    fn refresh_disks(&mut self) {
+        let update = if let Some(i) = self.last_disks {
+            i.elapsed().as_millis() > 30
+        }
+        else {true};
+
+        if update {
+            self.system.refresh_disks();
+            self.last_disks = Some(Instant::now()); 
+        }
+    }
 
     fn cpu(&mut self, core: &Option<usize>) -> &sysinfo::Processor {
         self.refresh_cpu();
@@ -286,6 +322,16 @@ impl CommandSharedState {
         (self.system.get_used_swap() * 1000, self.system.get_total_swap() * 1000)
     }
 
+    fn disk(&mut self, mnt: &String) -> Option<(u64, u64)> {
+        self.refresh_disks();
+        for i in self.system.get_disks() {
+            if i.get_mount_point() == config_dir().join(mnt) {
+                return Some((i.get_total_space() - i.get_available_space(), i.get_total_space()));
+            }
+        }
+        None
+    }
+
     fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
         let usage = self.cpu(core).get_cpu_usage();
         format!("{}{:.0}%", common.color(usage), usage)
@@ -297,36 +343,76 @@ impl CommandSharedState {
         format!("{}{:.2}GHz", common.color(freq), freq / 1000.0)
     }
 
+    fn common_usage(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+        match info {
+            Some((usage, _total)) => common.color(usage as f64) + &human_readable(usage) + "B",
+            None => "???".to_string()
+        }
+    }
+
+    fn common_percent(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+        match info {
+            Some((usage, total)) => {
+                let percent = usage as f64 / total as f64 * 100.;
+                format!("{}{:.2}%", common.color(percent) ,percent)
+            }
+            None => "???".to_string()
+        }
+    }
+
+    fn common_total(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+        match info {
+            Some((_usage, total)) => common.color(total as f64) + &human_readable(total) + "B",
+            None => "???".to_string()
+        }
+    }
+
+    // Memory
     fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, _) = self.mem();
-        common.color(usage as f64) + &human_readable(usage) + "B"
+        let mem = Some(self.mem());
+        self.common_usage(mem, common)
     }
 
     fn mem_percent(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, total) = self.mem();
-        let percent = usage as f64 / total as f64 * 100.;
-        format!("{}{:.2}%", common.color(percent) ,percent)
+        let mem = Some(self.mem());
+        self.common_percent(mem, common)
     }
 
     fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
-        let (_, total) = self.mem();
-        common.color(total as f64) + &human_readable(total) + "B"
+        let mem = Some(self.mem());
+        self.common_total(mem, common)
     }
 
+    // Swap
     fn swap_usage(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, _) = self.swap();
-        common.color(usage as f64) + &human_readable(usage) + "B"
+        let swap = Some(self.swap());
+        self.common_usage(swap, common)
     }
 
     fn swap_percent(&mut self, common: &InternalCommandCommon) -> String {
-        let (usage, total) = self.swap();
-        let percent = usage as f64 / total as f64 * 100.;
-        format!("{}{:.2}%", common.color(percent) ,percent)
+        let swap = Some(self.swap());
+        self.common_percent(swap, common)
     }
 
     fn swap_total(&mut self, common: &InternalCommandCommon) -> String {
-        let (_, total) = self.swap();
-        common.color(total as f64) + &human_readable(total) + "B"
+        let swap = Some(self.swap());
+        self.common_total(swap, common)
+    }
+
+    // Disk
+    fn disk_usage(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+        let disk = self.disk(mnt);
+        self.common_usage(disk, common)
+    }
+
+    fn disk_percent(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+        let disk = self.disk(mnt);
+        self.common_percent(disk, common)
+    }
+
+    fn disk_total(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+        let disk = self.disk(mnt);
+        self.common_total(disk, common)
     }
 
     fn net_stats_raw(&mut self, stat: &NetStatType, name: &Option<String>) -> Option<u64> {
