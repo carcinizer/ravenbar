@@ -55,14 +55,17 @@ pub enum Command {
     MemUsage(InternalCommandCommon),
     MemPercent(InternalCommandCommon),
     MemTotal(InternalCommandCommon),
+    MemFree(InternalCommandCommon),
     
     SwapUsage(InternalCommandCommon),
     SwapPercent(InternalCommandCommon),
     SwapTotal(InternalCommandCommon),
+    SwapFree(InternalCommandCommon),
 
     DiskUsage(String, InternalCommandCommon),
     DiskPercent(String, InternalCommandCommon),
     DiskTotal(String, InternalCommandCommon),
+    DiskFree(String, InternalCommandCommon),
     
     NetStats(NetStatType, Option<String>, InternalCommandCommon),
     NetStatsPerSecond(NetStatType, Option<String>, InternalCommandCommon)
@@ -123,14 +126,17 @@ impl Command {
                         "mem_usage" => Self::MemUsage(common),
                         "mem_percent" => Self::MemPercent(common),
                         "mem_total" => Self::MemTotal(common),
+                        "mem_free" => Self::MemFree(common),
                         
                         "swap_usage" => Self::SwapUsage(common),
                         "swap_percent" => Self::SwapPercent(common),
                         "swap_total" => Self::SwapTotal(common),
+                        "swap_free" => Self::SwapFree(common),
                         
                         "disk_usage" => Self::DiskUsage(mountpoint, common),
                         "disk_percent" => Self::DiskPercent(mountpoint, common),
                         "disk_total" => Self::DiskTotal(mountpoint, common),
+                        "disk_free" => Self::DiskFree(mountpoint, common),
 
                         "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network, common),
                         "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network, common),
@@ -201,6 +207,9 @@ impl Command {
             Self::MemTotal(common) => {
                 gi.mem_total(common)
             }
+            Self::MemFree(common) => {
+                gi.mem_free(common)
+            }
             Self::SwapUsage(common) => {
                 gi.swap_usage(common)
             }
@@ -210,6 +219,9 @@ impl Command {
             Self::SwapTotal(common) => {
                 gi.swap_total(common)
             }
+            Self::SwapFree(common) => {
+                gi.swap_free(common)
+            }
             Self::DiskUsage(mnt, common) => {
                 gi.disk_usage(mnt, common)
             }
@@ -218,6 +230,9 @@ impl Command {
             }
             Self::DiskTotal(mnt, common) => {
                 gi.disk_total(mnt, common)
+            }
+            Self::DiskFree(mnt, common) => {
+                gi.disk_free(mnt, common)
             }
             Self::NetStats(stat, name, common) => {
                 gi.net_stats(stat, name, common)
@@ -367,6 +382,13 @@ impl CommandSharedState {
         }
     }
 
+    fn common_free(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+        match info {
+            Some((usage, total)) => common.color((total - usage) as f64) + &human_readable(total - usage) + "B",
+            None => "???".to_string()
+        }
+    }
+
     // Memory
     fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
         let mem = Some(self.mem());
@@ -381,6 +403,11 @@ impl CommandSharedState {
     fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
         let mem = Some(self.mem());
         self.common_total(mem, common)
+    }
+
+    fn mem_free(&mut self, common: &InternalCommandCommon) -> String {
+        let mem = Some(self.mem());
+        self.common_free(mem, common)
     }
 
     // Swap
@@ -399,6 +426,11 @@ impl CommandSharedState {
         self.common_total(swap, common)
     }
 
+    fn swap_free(&mut self, common: &InternalCommandCommon) -> String {
+        let swap = Some(self.swap());
+        self.common_free(swap, common)
+    }
+
     // Disk
     fn disk_usage(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
         let disk = self.disk(mnt);
@@ -413,6 +445,11 @@ impl CommandSharedState {
     fn disk_total(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
         let disk = self.disk(mnt);
         self.common_total(disk, common)
+    }
+
+    fn disk_free(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+        let disk = self.disk(mnt);
+        self.common_free(disk, common)
     }
 
     fn net_stats_raw(&mut self, stat: &NetStatType, name: &Option<String>) -> Option<u64> {
