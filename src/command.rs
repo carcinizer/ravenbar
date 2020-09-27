@@ -253,7 +253,7 @@ impl Command {
 impl CommandSharedState {
     pub fn new() -> Self {
         Self {
-            system: sysinfo::System::new_all(),
+            system: sysinfo::System::new(),
 
             last_cpu: None,
             last_mem: None,
@@ -292,7 +292,10 @@ impl CommandSharedState {
         let update = if let Some(i) = self.last_net {
             i.elapsed().as_millis() > 30
         }
-        else {true};
+        else {
+            self.system.refresh_networks_list();
+            true
+        };
 
         if update {
             self.system.refresh_networks();
@@ -306,7 +309,10 @@ impl CommandSharedState {
         let update = if let Some(i) = self.last_disks {
             i.elapsed().as_millis() > 30
         }
-        else {true};
+        else {
+            self.system.refresh_disks_list();
+            true
+        };
 
         if update {
             self.system.refresh_disks();
