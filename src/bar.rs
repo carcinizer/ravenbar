@@ -176,6 +176,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         }
         else {false};
 
+        // Refresh widgets & calculate width
         let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, 0, mx, my);
         let width_right = self.refresh_widgets(false, &events, force, bar_redraw, self.offset, mx, my);
 
@@ -209,12 +210,14 @@ impl<'a, T: XConnection> Bar<'a, T> {
         // Redraw on exposure
         else {events.iter().find(|x| **x == Event::Expose) != None};
 
+        let mut middle_redraw = global_redraw;
 
         // Redraw left widgets
         for i in self.widgets_left.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
                 i.current.foreground.draw_all(self.window, &i.drawinfo, 0, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+                middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -224,12 +227,15 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
                 i.current.foreground.draw_all(self.window, &i.drawinfo, self.offset, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+                middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
-        // Draw background between widget chunks
-        self.default_bg.draw_bg(self.window, width_left, 0, (self.offset - width_left) as u16, height, height)?;
+        // Draw background between widget chunks, TODO: Smarter middle section redrawing
+        if middle_redraw {
+            self.default_bg.draw_bg(self.window, width_left, 0, (self.offset - width_left) as u16, height, height)?;
+        }
 
         self.window.flush()?;
 
