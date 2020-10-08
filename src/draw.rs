@@ -32,12 +32,12 @@ pub struct DrawFGInfo {
 
 impl DrawFGInfo {
     
-    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
+    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &mut Font, text: &String) -> DrawFGInfo {
        
         let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height - fgheight) / 2) as i16;
         
-        let (_, width) = font.glyphs_and_width(text, fgheight);
+        let width = font.width(text, fgheight);
         
         DrawFGInfo {x,y,width,height, fgy,fgheight}
     }
@@ -160,10 +160,26 @@ impl Drawable {
         }
     }
 
+    pub fn pixel(&self, _x: i16, y: i16, maxheight: u16) -> [u8;4] {
+        match self {
+            Self::Color(c) => [c.b,c.g,c.r,c.a],
+            Self::VGradient(cv) => {
+                let index = ((y as f32)/maxheight as f32) * (cv.len() - 1) as f32;
+
+                let color1: Color = cv[index.floor() as usize];
+                let color2: Color = cv[index.ceil() as usize];
+                let c = color1.mix(&color2, index.fract());
+                
+                [c.b,c.g,c.r,c.a]
+            }
+        }
+    }
+
     fn image(&self, _x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> Vec<u8> {
         let size = width as usize * height as usize;
         let mut v = Vec::with_capacity(size * 4);
         
+        // TODO remove
         match self {
             Self::Color(c) => {
                 for _ in 0..size {
@@ -210,6 +226,7 @@ impl Drawable {
         Ok(())
     }
 
+    // TODO put somewhere else
     fn draw_image<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
         
         let gc = window.conn.generate_id()?;
@@ -237,7 +254,7 @@ impl Drawable {
         info: &DrawFGInfo, 
         offset: i16,
         width_max: u16, 
-        font: &Font, 
+        font: &mut Font, 
         background: &Drawable, 
         text: &String) -> Result<(),Box<dyn Error>> 
     {
@@ -245,8 +262,8 @@ impl Drawable {
 
         let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
         let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
-        
-        font.draw_text(i.width, i.fgheight, &text, &fg, &mut bg)?;
+        // ?
+        font.draw_text(0,0,i.width, i.fgheight, &text, &fg, &mut bg)?;
 
         let fgx = i.x + (width_max - i.width) as i16 / 2;
 

@@ -42,7 +42,7 @@ pub struct Bar<'a, T: XConnection> {
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
-    font: Font<'a>,
+    font: Font,
     cmdginfo: CommandSharedState
 }
 
@@ -73,7 +73,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
-        let font = Font::new(&cfg.font[..], &window.fontconfig)?;
+        let font = Font::new(&cfg.font[..], &window.fontutils)?;
         let current = props.as_current(&vec![Event::Default], false);
 
         let mut bar = Self {props, widgets_left, widgets_right, window, font, 
@@ -143,7 +143,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             }
             
             // New draw info
-            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &self.font, &i.cmd_out);
+            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &mut self.font, &i.cmd_out);
 
             // New widget width
             let width = i.drawinfo.width;
@@ -216,7 +216,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets_left.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                i.current.foreground.draw_all(self.window, &i.drawinfo, 0, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+                i.current.foreground.draw_all(self.window, &i.drawinfo, 0, i.width_max, &mut self.font, &i.current.background, &i.cmd_out)?;
                 middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
@@ -226,7 +226,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets_right.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                i.current.foreground.draw_all(self.window, &i.drawinfo, self.offset, i.width_max, &self.font, &i.current.background, &i.cmd_out)?;
+                i.current.foreground.draw_all(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.font, &i.current.background, &i.cmd_out)?;
                 middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 

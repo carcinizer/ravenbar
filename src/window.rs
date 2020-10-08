@@ -1,4 +1,6 @@
 
+use crate::font::FontUtils;
+
 use std::error::Error;
 
 use x11rb::protocol::xproto::*;
@@ -33,7 +35,7 @@ pub struct Window<'a, T: XConnection> {
     pub window: u32,
     pub colormap: u32,
     pub conn: &'a T,
-    pub fontconfig: fontconfig::Fontconfig,
+    pub fontutils: FontUtils,
     pub depth: u8,
 
     screen: &'a Screen,
@@ -172,10 +174,10 @@ impl<T: XConnection> Window<'_, T> {
 
         conn.flush()?;
 
-        let fontconfig = fontconfig::Fontconfig::new().unwrap();
+        let fontutils = FontUtils::new()?;
         let atoms = Atoms::new(conn)?.reply()?;
 
-        let wnd = Window {window, colormap, conn, fontconfig, screen, depth, atoms};
+        let wnd = Window {window, colormap, conn, fontutils, screen, depth, atoms};
 
         Ok(wnd)
     }

@@ -10,7 +10,7 @@ edition = "2018"
 x11rb = { version = "0.6" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rusttype = "0.9.2"
+freetype-rs = "0.26"
 fontconfig = "0.2.0"
 run_script = "^0.6.3"
 unicode-normalization = "0.1.13"

@@ -3,86 +3,143 @@ use crate::draw::Color;
 use crate::utils::{mul_comp, mix_comp};
 
 use std::error::Error;
+use std::collections::HashMap;
 
 use fontconfig;
-use rusttype;
-use rusttype::{point, PositionedGlyph, Scale};
+use freetype;
+use freetype::face::LoadFlag;
 use unicode_normalization::UnicodeNormalization;
 
 
-pub type FontConfig = fontconfig::Fontconfig;
-
-pub struct Font<'a> {
-    font: rusttype::Font<'a>,
+pub struct FontUtils {
+    fc: fontconfig::Fontconfig,
+    lib: freetype::Library
 }
 
-impl Font<'_> {
-    pub fn new(name: &str, fc: &FontConfig) -> Result<Self, Box<dyn Error>> {
-        let fontpath = fc.find(name, None).unwrap().path;
+pub struct Font {
+    face: freetype::Face,
+    baseline: HashMap<u16, u16>,
+    glyphs: HashMap<(char, u16), Glyph>
+}
 
-        let font = rusttype::Font::try_from_vec(std::fs::read(fontpath)?).unwrap();
+pub struct Glyph {
+    bitmap: Vec<u8>,
+    x: u16,
+    y: u16,
+    w: u16,
+    h: u16,
+    advx: u16,
+    advy: u16
+}
 
-        Ok( Self {font} )
+/// TODO subpixel handling
+impl Font {
+    pub fn new(name: &str, fu: &FontUtils) -> Result<Self, Box<dyn Error>> {
+        let fontpath = fu.fc.find(name, None).unwrap().path;
+
+        let face = fu.lib.new_face(fontpath,0)?;
+
+        Ok( Self {face, glyphs: HashMap::new(), baseline: HashMap::new()} )
     }
 
-    fn ascent(&self, height: u16) -> f32 {
-        self.font.v_metrics(scale(height)).ascent
-    }
+    /// Get distance from top to baseline, or calculate it based on common characters
+    fn baseline(&mut self, height: u16) -> u16 {
+        let calcdesc = match self.baseline.get(&height) {
+            Some(_) => None,
+            None => Some({
 
-    pub fn glyphs(&self, text: &String, height: u16) -> Vec<PositionedGlyph> {
-        self.font.layout(&text[..], scale(height), point(0.0, self.ascent(height)) ).collect::<Vec<_>>()
-    }
+                self.face.set_pixel_sizes(0, height as _).expect("Failed to set font size");
 
-    fn calc_width(&self, glyphs: &Vec<PositionedGlyph>) -> u16 {
-        glyphs
-            .iter()
-            .rev()
-            .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
-            .next()
-            .unwrap_or(0.0).ceil() as _
-    }
+                "gjpqy".chars().map( |ch| {
+                    self.face.load_char(ch as _, LoadFlag::RENDER).unwrap();
+                    
+                    let ftglyph = self.face.glyph();
+                    ftglyph.bitmap().rows() - ftglyph.bitmap_top()
 
-    pub fn glyphs_and_width(&self, text: &String, height: u16) -> (Vec<PositionedGlyph<'_>>, u16) {
-        let text_nfc = text.nfc().formatted().map(|x| x.0).collect::<String>();
-        let glyphs = self.glyphs(&text_nfc, height);
-        let width = self.calc_width(&glyphs);
-        (glyphs, width)
-    }
-
-    pub fn draw_text(&self, width: u16, height: u16, text: &String, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
-
-        let fchars = text.nfc().formatted().collect::<Vec<_>>();
+                }).fold(0, |acc, x| acc.max(x)) as u16
+            })
+        };
         
-        let plaintext = fchars.iter().map(|x| x.0).collect::<String>();
-        let glyphs = self.glyphs(&plaintext, height);
+        let descend = match calcdesc {
+            Some(x) => *self.baseline.entry(height).or_insert(x),
+            None => *self.baseline.get(&height).unwrap()
+        };
 
-        for (g, (fgc,bgc)) in glyphs.iter().zip(fchars.iter().map(|x| (x.1,x.2))) {
-            if let Some(bb) = g.pixel_bounding_box() {
-                g.draw( |x,y,v| {
+        height - descend
+    }
 
-                    let x = x as i16 + bb.min.x as i16;
-                    let y = y as i16 + bb.min.y as i16;
+    /// Get a glyph for specified character, create one if unavailable
+    fn glyph(&mut self, ch: char, height: u16) -> &Glyph {
 
-                    let arrpos = (y*width as i16 + x) as usize * 4;
-                    if arrpos < bg.len() {
+        let baseline = self.baseline(height);
 
-                        for i in 0..3 {
-                            let fgformat = mul_comp(fg[arrpos+i], fgc.get(i));
-                            let bgformat = mul_comp(bg[arrpos+i], bgc.get(i));
-                            bg[arrpos+i] = mix_comp(bgformat, fgformat, v);
-                        }
-                    }
+        let newglyph = match self.glyphs.get(&(ch, height)) {
+            Some(_) => None,
+            None => {
+
+                self.face.set_pixel_sizes(0, height as _).expect("Failed to set font size");
+                self.face.load_char(ch as _, LoadFlag::RENDER).unwrap();
+
+                let ftglyph = self.face.glyph();
+
+                Some(Glyph {
+                    bitmap: Vec::from(ftglyph.bitmap().buffer()),
+                    x: (ftglyph.bitmap_left()) as u16,
+                    y: baseline - (ftglyph.bitmap_top()) as u16,
+                    advx: (ftglyph.advance().x / 64) as u16,
+                    advy: (ftglyph.advance().y / 64) as u16,
+                    w: ftglyph.bitmap().width() as u16,
+                    h: ftglyph.bitmap().rows() as u16,
                 })
             }
+        };
+        
+        match newglyph {
+            Some(x) => {self.glyphs.entry((ch,height)).or_insert(x)},
+            None => self.glyphs.get(&(ch, height)).unwrap()
         }
 
+    }
+
+    pub fn width(&mut self, text: &String, height: u16) -> u16 {
+        let text_nfc = text.nfc().formatted().map(|x| x.0).collect::<String>();
+        
+        text_nfc.chars().fold(0, |acc, ch| {
+            acc + (self.glyph(ch, height).advx) as u16
+        })
+    }
+
+    pub fn draw_text(&mut self, x: u16, y: u16, width: u16, height: u16, text: &String, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+
+        let fchars = text.nfc().formatted().collect::<Vec<_>>();
+        let mut cursor = 0;
+        
+        for (ch, fgc, bgc) in fchars.iter() {
+            let glyph = self.glyph(*ch, height);
+
+            for iy in y..(y+glyph.h) {
+                for ix in x..(x+glyph.w) {
+
+                    let bgindex = ((iy+y+glyph.y)*width+ix+x+glyph.x+cursor) as usize;
+                    let glyphindex = (iy*glyph.w+ix) as usize;
+                    
+                    for i in 0..4 {
+                        let factor =  (glyph.bitmap[glyphindex] as f32) / 255.0;
+                        let p = bgindex*4+i;
+                        
+                        let fmtfg = mul_comp(fg[p], fgc.get(i));
+                        let fmtbg = mul_comp(bg[p], bgc.get(i));
+
+                        bg[p] = mix_comp(fmtbg, fmtfg, factor);
+                    }
+                }
+            }
+            cursor += glyph.advx;
+        }
+        
         Ok(())
     }
     
-}
-
-fn scale(height: u16) -> Scale {
-    Scale{x: height as f32, y: height as f32}
 }
 
 pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
@@ -156,3 +213,14 @@ impl<T> Formatted<T> for T
     }
 }
 
+impl FontUtils {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            fc: match fontconfig::Fontconfig::new() {
+                Some(x) => x,
+                None => {panic!("Failed to initialize Fontconfig")} // TODO result
+            },
+            lib: freetype::Library::init()?
+        })
+    }
+}
