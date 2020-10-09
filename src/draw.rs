@@ -254,8 +254,8 @@ impl Drawable {
         let i = info;
 
         // Text
-        let bg = font.draw_text(i.x as _,i.y as _,i.width, i.fgheight, i.height, &text, &self, &background)?;
         let fgx = i.x + (width_max - i.width) as i16 / 2;
+        let bg = font.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &self, &background)?;
         self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
 
         // Top and bottom borders
