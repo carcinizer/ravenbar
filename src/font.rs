@@ -1,6 +1,5 @@
 
-use crate::draw::{Color, Drawable};
-use crate::utils::{mul_comp, mix_comp};
+use crate::draw::{Drawable, DrawableSet};
 
 use std::error::Error;
 use std::collections::HashMap;
@@ -102,7 +101,7 @@ impl Font {
     }
 
     pub fn width(&mut self, text: &String, height: u16) -> u16 {
-        let text_nfc = text.nfc().formatted().map(|x| x.0).collect::<String>();
+        let text_nfc = text.nfc().formatted(None).map(|x| x.0).collect::<String>();
         
         text_nfc.chars().fold(0, |acc, ch| {
             acc + (self.glyph(ch, height).advx) as u16
@@ -116,13 +115,12 @@ impl Font {
         height: u16,
         maxheight: u16,
         text: &String,
-        fg: &Drawable,
-        bg: &Drawable
+        ds: &DrawableSet
         ) -> Result<Vec<u8>, Box<dyn Error>> 
     {
-        let mut v = bg.image(x as i16,y as i16,width,height,maxheight);
+        let mut v = ds.background.image(x as i16,y as i16,width,height,maxheight);
 
-        let fchars = text.nfc().formatted().collect::<Vec<_>>();
+        let fchars = text.nfc().formatted(Some(ds)).collect::<Vec<_>>();
         let mut cursor = 0;
         
         for (ch, fgc, bgc) in fchars.iter() {
@@ -135,8 +133,8 @@ impl Font {
                     let px = (x+ix+glyph.x+cursor) as i16;
                     let py = (y+iy+glyph.y) as i16;
                     
-                    let fgpix = fg.pixel(px, py, maxheight).mul(fgc);
-                    let bgpix = bg.pixel(px, py, maxheight).mul(bgc);
+                    let fgpix = fgc.pixel(px, py, maxheight);
+                    let bgpix = bgc.pixel(px, py, maxheight);
                     
                     let factor =  (glyph.bitmap[(iy*glyph.w+ix) as usize] as f32) / 255.0;
                     let color = &bgpix.mix(&fgpix, factor);
@@ -156,14 +154,15 @@ impl Font {
 
 pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
     chars: &'a mut T,
-    fg: Color,
-    bg: Color
+    ds: Option<&'a DrawableSet>,
+    fg: Drawable,
+    bg: Drawable
 }
 
 impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T> 
     where T: std::iter::Iterator<Item = char>
 {
-    type Item = (char, Color, Color);
+    type Item = (char, Drawable, Drawable);
 
     fn next(&mut self) -> Option<Self::Item> {
             
@@ -182,29 +181,18 @@ impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T>
                         .split(';')
                         .map(|x| x.parse::<u32>().unwrap_or(0));
                     
-                    let sgr = params.next().unwrap_or(0);
-                    let color = Color::from_sgr(sgr%10, &params.collect());
+                    if let Some(dset) = self.ds {
+                        let sgr = params.next().unwrap_or(0);
+                        let (d, isbackground) = dset.sgrcolor(sgr, params.collect());
 
-                    let (fg,bg) = match sgr/10 {
-                        3   => (color, self.bg),
-                        9   => (color.bright(), self.bg),
-                        4   => (self.fg, color),
-                        10  => (self.fg, color.bright()),
-
-                        0 => if sgr == 0 {
-                                (Color::white(), Color::white())
-                             } 
-                             else {
-                                (self.fg, self.bg)
-                             },
-
-                        _ => (self.fg, self.bg)
-                    };
-                    self.fg = fg;
-                    self.bg = bg;
+                        if isbackground {
+                            self.bg = d;
+                        }
+                        else {self.fg = d};
+                    }
                 }
                 else if !first.is_control() {
-                    return Some((first, self.fg, self.bg));
+                    return Some((first, self.fg.clone(), self.bg.clone()));
                 }
             }
             else {
@@ -215,13 +203,18 @@ impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T>
 }
 
 pub trait Formatted<T: std::iter::Iterator<Item = char>> {
-    fn formatted(&mut self) -> FormattedTextIter<'_, T>;
+    fn formatted<'a>(&'a mut self, ds: Option<&'a DrawableSet>) -> FormattedTextIter<'a, T>;
 }
 
 impl<T> Formatted<T> for T 
     where T: std::iter::Iterator<Item = char> {
-    fn formatted(&mut self) -> FormattedTextIter<'_, T> {
-        FormattedTextIter { chars: self, fg: Color::white(), bg: Color::white() }
+    fn formatted<'a>(&'a mut self, ds: Option<&'a DrawableSet>) -> FormattedTextIter<'a, T> {
+        
+        let (fg, bg) = match ds {
+            Some(d) => (d.foreground.clone(), d.background.clone()),
+            None => (Drawable::from("#FFFFFF".to_string()), Drawable::from("#FFFFFF".to_string()))
+        };
+        FormattedTextIter { chars: self, ds, fg, bg}
     }
 }
 

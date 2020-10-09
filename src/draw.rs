@@ -2,6 +2,7 @@
 use crate::window::{Window, XConnection};
 use crate::font::Font;
 use crate::utils::{mix_comp, mul_comp};
+use crate::props::WidgetPropsCurrent;
 
 use std::error::Error;
 
@@ -28,6 +29,29 @@ pub struct DrawFGInfo {
     pub height: u16,
     pub fgy: i16,
     pub fgheight: u16,
+}
+
+pub struct DrawableSet {
+    pub foreground:  Drawable,
+    pub background:  Drawable,
+
+    pub black:    Drawable,
+    pub red:      Drawable,
+    pub green:    Drawable,
+    pub yellow:   Drawable,
+    pub blue:     Drawable,
+    pub magenta:  Drawable,
+    pub cyan:     Drawable,
+    pub white:    Drawable,
+
+    pub bright_black:    Drawable,
+    pub bright_red:      Drawable,
+    pub bright_green:    Drawable,
+    pub bright_yellow:   Drawable,
+    pub bright_blue:     Drawable,
+    pub bright_magenta:  Drawable,
+    pub bright_cyan:     Drawable,
+    pub bright_white:    Drawable,
 }
 
 impl DrawFGInfo {
@@ -77,46 +101,6 @@ impl Color {
             6 => (0, b, b), // Cyan
             _ => (b, b, b), // White/Gray
         }
-    }
-
-    pub fn from_sgr(n: u32, params: &Vec<u32>) -> Self {
-        let (r,g,b) : (u8, u8, u8) = match n {
-
-            8 => match params.get(0) {
-                // True color
-                Some(2) => match params.get(1..4) {
-                    Some(x) => (x[0] as _, x[1] as _, x[2] as _),
-                    None => Self::sgr_color16(7,205)
-                }
-                // 256 color palette
-                Some(5) => match params.get(1) {
-                    Some(x) => {
-                        if x < &8 {
-                            Self::sgr_color16(*x,205)
-                        }
-                        else if x < &16 {
-                            Self::sgr_color16(x%16, 255)
-                        }
-                        else if x < &232 {
-                            let r = (x-16) / 36;
-                            let g = ((x-16) / 6) % 6;
-                            let b = (x-16) % 6;
-                            
-                            ((r*256/6) as _, (g*256/6) as _, (b*256/6) as _)
-                        }
-                        else {
-                            let b = ((x - 232) * 256 / 24) as u8;
-                            (b,b,b)
-                        }
-                    }
-                    None => Self::sgr_color16(7,205)
-                },
-                _ => Self::sgr_color16(7, 205)
-            }
-            // 16 color palette
-            _ => Self::sgr_color16(n, 205)
-        };
-        Self {r,g,b,a: 255}
     }
 
     pub fn white() -> Self {
@@ -213,61 +197,151 @@ impl Drawable {
 
                 window.conn.free_gc(gc)?;
             }
-            _ => self.draw_image(window, x, y, width, height, 
-                             &self.image(x, y, width, height, maxheight))?
+            _ => draw_image(window, x, y, width, height, 
+                            &self.image(x, y, width, height, maxheight))?
         }
         Ok(())
     }
-
-    // TODO put somewhere else
-    fn draw_image<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
-        
-        let gc = window.conn.generate_id()?;
-        window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
-
-        window.conn.put_image(
-            ImageFormat::ZPixmap, 
-            window.window, 
-            gc, 
-            width, 
-            height,
-            x,
-            y,
-            0, 
-            window.depth, 
-            &data)?;
-        
-        window.conn.free_gc(gc)?;
-        Ok(())
-    }
-    
-
-    pub fn draw_all<T: XConnection>(&self, 
-        window: &Window<T>, 
-        info: &DrawFGInfo, 
-        offset: i16,
-        width_max: u16, 
-        font: &mut Font, 
-        background: &Drawable, 
-        text: &String) -> Result<(),Box<dyn Error>> 
-    {
-        let i = info;
-
-        // Text
-        let fgx = i.x + (width_max - i.width) as i16 / 2;
-        let bg = font.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &self, &background)?;
-        self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
-
-        // Top and bottom borders
-        background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height)?;
-        background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height)?;
-        
-        // Left and right borders
-        background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
-        background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
-
-        Ok(())
-    }
-
 }
 
+
+// TODO put somewhere else
+fn draw_image<T: XConnection>(window: &Window<T>, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+    
+    let gc = window.conn.generate_id()?;
+    window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
+
+    window.conn.put_image(ImageFormat::ZPixmap, window.window, gc, 
+        width, height, x, y, 0, window.depth, &data)?;
+    
+    window.conn.free_gc(gc)?;
+    Ok(())
+}
+
+pub fn draw_widget<T: XConnection>(
+    window: &Window<T>, 
+    info: &DrawFGInfo, 
+    offset: i16,
+    width_max: u16, 
+    font: &mut Font, 
+    ds: &DrawableSet, 
+    text: &String) -> Result<(),Box<dyn Error>> 
+{
+    let i = info;
+
+    // Text
+    let fgx = i.x + (width_max - i.width) as i16 / 2;
+    let bg = font.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &ds)?;
+    draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
+
+    // Top and bottom borders
+    ds.background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height)?;
+    ds.background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height)?;
+    
+    // Left and right borders
+    ds.background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
+    ds.background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
+
+    Ok(())
+}
+
+impl DrawableSet {
+
+    pub fn from(props: &WidgetPropsCurrent) -> Self {
+        Self {
+            foreground: props.foreground.clone(),
+            background: props.background.clone(),
+            
+            black: props.black.clone(),
+            red: props.red.clone(),
+            green: props.green.clone(),
+            yellow: props.yellow.clone(),
+            blue: props.blue.clone(),
+            magenta: props.magenta.clone(),
+            cyan: props.cyan.clone(),
+            white: props.white.clone(),
+            
+            bright_black: props.bright_black.clone(),
+            bright_red: props.bright_red.clone(),
+            bright_green: props.bright_green.clone(),
+            bright_yellow: props.bright_yellow.clone(),
+            bright_blue: props.bright_blue.clone(),
+            bright_magenta: props.bright_magenta.clone(),
+            bright_cyan: props.bright_cyan.clone(),
+            bright_white: props.bright_white.clone(),
+        }
+    }
+
+    pub fn sgrcolor(&self, n: u32, params: Vec<u32>) -> (Drawable, bool) {
+
+        let isbackground = match (n/10) % 2 {
+            0 => true,
+            _ => false
+        };
+
+        let drawable = match n % 10 {
+            8 => match params.get(0) {
+                // True color
+                Some(2) => match params.get(1..4) {
+                    Some(x) => {let r = x[0] as _; let g = x[1] as _; let b = x[2] as _;
+                                Drawable::Color(Color{r,g,b,a:255})},
+                    None => self.basecolor(39, isbackground)
+                }
+                // 256 color palette
+                Some(5) => match params.get(1) {
+                    Some(x) => {
+                        if x < &8 {
+                            self.basecolor(x+30, isbackground)
+                        }
+                        else if x < &16 {
+                            self.basecolor(x+90, isbackground)
+                        }
+                        else if x < &232 {
+                            let r = (x-16) / 36;
+                            let g = ((x-16) / 6) % 6;
+                            let b = (x-16) % 6;
+                            
+                            let (r,g,b) = ((r*256/6) as _, (g*256/6) as _, (b*256/6) as _);
+                            Drawable::Color(Color{r,g,b,a:255})
+                        }
+                        else {
+                            let v = ((x - 232) * 256 / 24) as u8;
+                            Drawable::Color(Color{r:v,g:v,b:v,a:255})
+                        }
+                    }
+                    None => self.basecolor(39, isbackground)
+                },
+                _ => self.basecolor(39, isbackground)
+            }
+            // 16 color palette
+            _ => self.basecolor(n, isbackground)
+        };
+
+        (drawable, isbackground)
+    }
+
+    pub fn basecolor(&self, n: u32, isbackground: bool) -> Drawable {
+
+        match n {
+            30 => self.black.clone(),
+            31 => self.red.clone(),
+            32 => self.green.clone(),
+            33 => self.yellow.clone(),
+            34 => self.blue.clone(),
+            35 => self.magenta.clone(),
+            36 => self.cyan.clone(),
+            37 => self.white.clone(),
+            
+            90 => self.bright_black.clone(),
+            91 => self.bright_red.clone(),
+            92 => self.bright_green.clone(),
+            93 => self.bright_yellow.clone(),
+            94 => self.bright_blue.clone(),
+            95 => self.bright_magenta.clone(),
+            96 => self.bright_cyan.clone(),
+            97 => self.bright_white.clone(),
+
+            _ => if isbackground {self.background.clone()} else {self.foreground.clone()}
+        }
+    }
+}

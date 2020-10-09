@@ -5,7 +5,7 @@ use crate::event::Event;
 use crate::font::Font;
 use crate::command::CommandSharedState;
 use crate::config::{BarConfig, BarConfigWidget};
-use crate::draw::{Drawable, DrawFGInfo};
+use crate::draw::{Drawable, DrawableSet, DrawFGInfo, draw_widget};
 
 use std::time::Instant;
 
@@ -216,7 +216,10 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets_left.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                i.current.foreground.draw_all(self.window, &i.drawinfo, 0, i.width_max, &mut self.font, &i.current.background, &i.cmd_out)?;
+                
+                let ds = DrawableSet::from(&i.current);
+
+                draw_widget(self.window, &i.drawinfo, 0, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
                 middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
@@ -226,7 +229,10 @@ impl<'a, T: XConnection> Bar<'a, T> {
         for i in self.widgets_right.iter_mut() {
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                i.current.foreground.draw_all(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.font, &i.current.background, &i.cmd_out)?;
+
+                let ds = DrawableSet::from(&i.current);
+
+                draw_widget(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
                 middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
