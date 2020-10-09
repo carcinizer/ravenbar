@@ -1,7 +1,7 @@
 
 use crate::window::{Window, XConnection};
 use crate::font::Font;
-use crate::utils::mix_comp;
+use crate::utils::{mix_comp, mul_comp};
 
 use std::error::Error;
 
@@ -141,11 +141,23 @@ impl Color {
         }
     }
 
+    pub fn array(&self) -> [u8; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+
     pub fn mix(&self, other: &Self, factor: f32) -> Self {
         let r = mix_comp(self.r, other.r, factor);
         let g = mix_comp(self.g, other.g, factor);
         let b = mix_comp(self.b, other.b, factor);
         let a = mix_comp(self.a, other.a, factor);
+        Self {r,g,b,a}
+    }
+
+    pub fn mul(&self, other: &Self) -> Self {
+        let r = mul_comp(self.r, other.r);
+        let g = mul_comp(self.g, other.g);
+        let b = mul_comp(self.b, other.b);
+        let a = mul_comp(self.a, other.a);
         Self {r,g,b,a}
     }
 }
@@ -160,44 +172,25 @@ impl Drawable {
         }
     }
 
-    pub fn pixel(&self, _x: i16, y: i16, maxheight: u16) -> [u8;4] {
+    pub fn pixel(&self, _x: i16, y: i16, maxheight: u16) -> Color {
         match self {
-            Self::Color(c) => [c.b,c.g,c.r,c.a],
+            Self::Color(c) => *c,
             Self::VGradient(cv) => {
                 let index = ((y as f32)/maxheight as f32) * (cv.len() - 1) as f32;
 
                 let color1: Color = cv[index.floor() as usize];
                 let color2: Color = cv[index.ceil() as usize];
-                let c = color1.mix(&color2, index.fract());
-                
-                [c.b,c.g,c.r,c.a]
+                color1.mix(&color2, index.fract())
             }
         }
     }
 
-    fn image(&self, _x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> Vec<u8> {
-        let size = width as usize * height as usize;
-        let mut v = Vec::with_capacity(size * 4);
+    pub fn image(&self, x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> Vec<u8> {
+        let mut v = Vec::with_capacity((width * height) as usize * 4);
         
-        // TODO remove
-        match self {
-            Self::Color(c) => {
-                for _ in 0..size {
-                    v.extend(&[c.b, c.g, c.r, c.a]);
-                }
-            }
-            Self::VGradient(cv) => {
-                for iy in 0..height {
-                    for _ in 0..width {
-                        let index = ((y as f32 + iy as f32)/maxheight as f32) * (cv.len() - 1) as f32;
-
-                        let color1: Color = cv[index.floor() as usize];
-                        let color2: Color = cv[index.ceil() as usize];
-                        let c = color1.mix(&color2, index.fract());
-
-                        v.extend(&[c.b, c.g, c.r, c.a]);
-                    }
-                }
+        for iy in y..(y+height as i16) {
+            for ix in x..(x+width as i16) {
+                v.extend(&self.pixel(ix, iy, maxheight).array())
             }
         }
 
@@ -260,14 +253,9 @@ impl Drawable {
     {
         let i = info;
 
-        let fg     = self      .image(i.x,i.fgy,i.width,i.fgheight,i.height);
-        let mut bg = background.image(i.x,i.fgy,i.width,i.fgheight,i.height);
-        // ?
-        font.draw_text(0,0,i.width, i.fgheight, &text, &fg, &mut bg)?;
-
-        let fgx = i.x + (width_max - i.width) as i16 / 2;
-
         // Text
+        let bg = font.draw_text(i.x as _,i.y as _,i.width, i.fgheight, i.height, &text, &self, &background)?;
+        let fgx = i.x + (width_max - i.width) as i16 / 2;
         self.draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
 
         // Top and bottom borders

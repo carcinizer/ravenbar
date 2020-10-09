@@ -1,5 +1,5 @@
 
-use crate::draw::Color;
+use crate::draw::{Color, Drawable};
 use crate::utils::{mul_comp, mix_comp};
 
 use std::error::Error;
@@ -69,7 +69,7 @@ impl Font {
     }
 
     /// Get a glyph for specified character, create one if unavailable
-    fn glyph(&mut self, ch: char, height: u16) -> &Glyph {
+    pub fn glyph(&mut self, ch: char, height: u16) -> &Glyph {
 
         let baseline = self.baseline(height);
 
@@ -109,7 +109,18 @@ impl Font {
         })
     }
 
-    pub fn draw_text(&mut self, x: u16, y: u16, width: u16, height: u16, text: &String, fg: &Vec<u8> ,bg: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+    pub fn draw_text(&mut self, 
+        x: u16,
+        y: u16,
+        width: u16,
+        height: u16,
+        maxheight: u16,
+        text: &String,
+        fg: &Drawable,
+        bg: &Drawable
+        ) -> Result<Vec<u8>, Box<dyn Error>> 
+    {
+        let mut v = bg.image(x as i16,y as i16,width,height,maxheight);
 
         let fchars = text.nfc().formatted().collect::<Vec<_>>();
         let mut cursor = 0;
@@ -117,27 +128,28 @@ impl Font {
         for (ch, fgc, bgc) in fchars.iter() {
             let glyph = self.glyph(*ch, height);
 
-            for iy in y..(y+glyph.h) {
-                for ix in x..(x+glyph.w) {
+            for iy in 0..(glyph.h) {
+                for ix in 0..(glyph.w) {
+                    let bgindex = ((iy+glyph.y)*width+ix+glyph.x+cursor) as usize;
 
-                    let bgindex = ((iy+y+glyph.y)*width+ix+x+glyph.x+cursor) as usize;
-                    let glyphindex = (iy*glyph.w+ix) as usize;
+                    let px = (x+ix+glyph.x+cursor) as i16;
+                    let py = (y+iy+glyph.y) as i16;
                     
-                    for i in 0..4 {
-                        let factor =  (glyph.bitmap[glyphindex] as f32) / 255.0;
-                        let p = bgindex*4+i;
-                        
-                        let fmtfg = mul_comp(fg[p], fgc.get(i));
-                        let fmtbg = mul_comp(bg[p], bgc.get(i));
+                    let fgpix = fg.pixel(px, py, maxheight).mul(fgc);
+                    let bgpix = bg.pixel(px, py, maxheight).mul(bgc);
+                    
+                    let factor =  (glyph.bitmap[(iy*glyph.w+ix) as usize] as f32) / 255.0;
+                    let color = &bgpix.mix(&fgpix, factor);
 
-                        bg[p] = mix_comp(fmtbg, fmtfg, factor);
+                    for i in 0..3 {
+                        v[bgindex*4+i] = color.get(i);
                     }
                 }
             }
             cursor += glyph.advx;
         }
         
-        Ok(())
+        Ok(v)
     }
     
 }
