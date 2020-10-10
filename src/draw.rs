@@ -1,7 +1,7 @@
 
 use crate::window::{Window, XConnection};
 use crate::font::Font;
-use crate::utils::{mix_comp, mul_comp};
+use crate::utils::mix_comp;
 use crate::props::WidgetPropsCurrent;
 
 use std::error::Error;
@@ -90,43 +90,16 @@ impl Color {
         Self{r,g,b,a: a as u8}
     }
 
-    pub fn sgr_color16(n: u32, b: u8) -> (u8,u8,u8) {
-        match n {
-            0 => (0, 0, 0), // Black
-            1 => (b, 0, 0), // Red
-            2 => (0, b, 0), // Green
-            3 => (b, b, 0), // Yellow
-            4 => (0, 0, b), // Blue
-            5 => (b, 0, b), // Magenta
-            6 => (0, b, b), // Cyan
-            _ => (b, b, b), // White/Gray
-        }
-    }
-
-    pub fn white() -> Self {
-        Self {r: 255, g: 255, b: 255, a: 255}
-    }
-
-    pub fn bright(&self) -> Self {
-        Self {r: self.r + 50, g: self.g + 50, b: self.b + 50, a: self.a}
-    }
-
     pub fn as_xcolor(&self) -> u32 {
         ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
     }
 
     pub fn get(&self, i: usize) -> u8 {
-        match i {
-            0 => self.b,
-            1 => self.g,
-            2 => self.r,
-            3 => self.a,
-            _ => panic!("Tried to access {}th color field", i)
-        }
+        self.array()[i]
     }
 
     pub fn array(&self) -> [u8; 4] {
-        [self.r, self.g, self.b, self.a]
+        [self.b, self.g, self.r, self.a]
     }
 
     pub fn mix(&self, other: &Self, factor: f32) -> Self {
@@ -134,14 +107,6 @@ impl Color {
         let g = mix_comp(self.g, other.g, factor);
         let b = mix_comp(self.b, other.b, factor);
         let a = mix_comp(self.a, other.a, factor);
-        Self {r,g,b,a}
-    }
-
-    pub fn mul(&self, other: &Self) -> Self {
-        let r = mul_comp(self.r, other.r);
-        let g = mul_comp(self.g, other.g);
-        let b = mul_comp(self.b, other.b);
-        let a = mul_comp(self.a, other.a);
         Self {r,g,b,a}
     }
 }

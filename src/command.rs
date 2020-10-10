@@ -49,26 +49,26 @@ pub enum Command {
     Literal(String),
     Array(Vec<Command>),
     
-    CPUUsage(Option<usize>, InternalCommandCommon),
-    CPUFreq(Option<usize>, InternalCommandCommon),
+    CPUUsage(Option<usize>),
+    CPUFreq(Option<usize>),
 
-    MemUsage(InternalCommandCommon),
-    MemPercent(InternalCommandCommon),
-    MemTotal(InternalCommandCommon),
-    MemFree(InternalCommandCommon),
+    MemUsage(),
+    MemPercent(),
+    MemTotal(),
+    MemFree(),
     
-    SwapUsage(InternalCommandCommon),
-    SwapPercent(InternalCommandCommon),
-    SwapTotal(InternalCommandCommon),
-    SwapFree(InternalCommandCommon),
+    SwapUsage(),
+    SwapPercent(),
+    SwapTotal(),
+    SwapFree(),
 
-    DiskUsage(String, InternalCommandCommon),
-    DiskPercent(String, InternalCommandCommon),
-    DiskTotal(String, InternalCommandCommon),
-    DiskFree(String, InternalCommandCommon),
+    DiskUsage(String),
+    DiskPercent(String),
+    DiskTotal(String),
+    DiskFree(String),
     
-    NetStats(NetStatType, Option<String>, InternalCommandCommon),
-    NetStatsPerSecond(NetStatType, Option<String>, InternalCommandCommon)
+    NetStats(NetStatType, Option<String>),
+    NetStatsPerSecond(NetStatType, Option<String>)
 }
 
 impl Command {
@@ -101,12 +101,6 @@ impl Command {
                         None => None
                     };
 
-                    let common = InternalCommandCommon {
-                        warn: get_number("warn"),
-                        critical: get_number("critical"),
-                        dim: get_number("dim")
-                    };
-
                     let network = match obj.get("network_name") {
                         Some(Value::String(s)) => Some(s.to_owned()),
                         Some(_) => panic!("network_name must be a string"),
@@ -120,44 +114,44 @@ impl Command {
                     };
 
                     match &t[..] {
-                        "cpu_usage" => Self::CPUUsage(core, common),
-                        "cpu_freq" => Self::CPUFreq(core, common),
+                        "cpu_usage" => Self::CPUUsage(core),
+                        "cpu_freq" => Self::CPUFreq(core),
 
-                        "mem_usage" => Self::MemUsage(common),
-                        "mem_percent" => Self::MemPercent(common),
-                        "mem_total" => Self::MemTotal(common),
-                        "mem_free" => Self::MemFree(common),
+                        "mem_usage" => Self::MemUsage(),
+                        "mem_percent" => Self::MemPercent(),
+                        "mem_total" => Self::MemTotal(),
+                        "mem_free" => Self::MemFree(),
                         
-                        "swap_usage" => Self::SwapUsage(common),
-                        "swap_percent" => Self::SwapPercent(common),
-                        "swap_total" => Self::SwapTotal(common),
-                        "swap_free" => Self::SwapFree(common),
+                        "swap_usage" => Self::SwapUsage(),
+                        "swap_percent" => Self::SwapPercent(),
+                        "swap_total" => Self::SwapTotal(),
+                        "swap_free" => Self::SwapFree(),
                         
-                        "disk_usage" => Self::DiskUsage(mountpoint, common),
-                        "disk_percent" => Self::DiskPercent(mountpoint, common),
-                        "disk_total" => Self::DiskTotal(mountpoint, common),
-                        "disk_free" => Self::DiskFree(mountpoint, common),
+                        "disk_usage" => Self::DiskUsage(mountpoint),
+                        "disk_percent" => Self::DiskPercent(mountpoint),
+                        "disk_total" => Self::DiskTotal(mountpoint),
+                        "disk_free" => Self::DiskFree(mountpoint),
 
-                        "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network, common),
-                        "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network, common),
-                        "net_download_packets" =>       Self::NetStatsPerSecond(NetStatType::DownloadPackets, network, common),
-                        "net_upload_packets" =>         Self::NetStatsPerSecond(NetStatType::UploadPackets, network, common),
-                        "net_download_errors" =>        Self::NetStatsPerSecond(NetStatType::DownloadErrors, network, common),
-                        "net_upload_errors" =>          Self::NetStatsPerSecond(NetStatType::UploadErrors, network, common),
+                        "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network),
+                        "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network),
+                        "net_download_packets" =>       Self::NetStatsPerSecond(NetStatType::DownloadPackets, network),
+                        "net_upload_packets" =>         Self::NetStatsPerSecond(NetStatType::UploadPackets, network),
+                        "net_download_errors" =>        Self::NetStatsPerSecond(NetStatType::DownloadErrors, network),
+                        "net_upload_errors" =>          Self::NetStatsPerSecond(NetStatType::UploadErrors, network),
 
-                        "net_download_since" =>         Self::NetStats(NetStatType::Download, network, common),
-                        "net_upload_since" =>           Self::NetStats(NetStatType::Upload, network, common),
-                        "net_download_packets_since" => Self::NetStats(NetStatType::DownloadPackets, network, common),
-                        "net_upload_packets_since" =>   Self::NetStats(NetStatType::UploadPackets, network, common),
-                        "net_download_errors_since" =>  Self::NetStats(NetStatType::DownloadErrors, network, common),
-                        "net_upload_errors_since" =>    Self::NetStats(NetStatType::UploadErrors, network, common),
+                        "net_download_since" =>         Self::NetStats(NetStatType::Download, network),
+                        "net_upload_since" =>           Self::NetStats(NetStatType::Upload, network),
+                        "net_download_packets_since" => Self::NetStats(NetStatType::DownloadPackets, network),
+                        "net_upload_packets_since" =>   Self::NetStats(NetStatType::UploadPackets, network),
+                        "net_download_errors_since" =>  Self::NetStats(NetStatType::DownloadErrors, network),
+                        "net_upload_errors_since" =>    Self::NetStats(NetStatType::UploadErrors, network),
 
-                        "net_download_total" =>         Self::NetStats(NetStatType::DownloadTotal, network, common),
-                        "net_upload_total" =>           Self::NetStats(NetStatType::UploadTotal, network, common),
-                        "net_download_packets_total" => Self::NetStats(NetStatType::DownloadPacketsTotal, network, common),
-                        "net_upload_packets_total" =>   Self::NetStats(NetStatType::UploadPacketsTotal, network, common),
-                        "net_download_errors_total" =>  Self::NetStats(NetStatType::DownloadErrorsTotal, network, common),
-                        "net_upload_errors_total" =>    Self::NetStats(NetStatType::UploadErrorsTotal, network, common),
+                        "net_download_total" =>         Self::NetStats(NetStatType::DownloadTotal, network),
+                        "net_upload_total" =>           Self::NetStats(NetStatType::UploadTotal, network),
+                        "net_download_packets_total" => Self::NetStats(NetStatType::DownloadPacketsTotal, network),
+                        "net_upload_packets_total" =>   Self::NetStats(NetStatType::UploadPacketsTotal, network),
+                        "net_download_errors_total" =>  Self::NetStats(NetStatType::DownloadErrorsTotal, network),
+                        "net_upload_errors_total" =>    Self::NetStats(NetStatType::UploadErrorsTotal, network),
 
                         _ => {panic!("Command type '{}' not available", t)}
                     }
@@ -192,53 +186,53 @@ impl Command {
                 }
                 output
             }
-            Self::CPUUsage(core, common) => {
-                gi.cpu_usage(core, common)
+            Self::CPUUsage(core) => {
+                gi.cpu_usage(core)
             }
-            Self::CPUFreq(core, common) => {
-                gi.cpu_freq(core, common)
+            Self::CPUFreq(core) => {
+                gi.cpu_freq(core)
             }
-            Self::MemUsage(common) => {
-                gi.mem_usage(common)
+            Self::MemUsage() => {
+                gi.mem_usage()
             }
-            Self::MemPercent(common) => {
-                gi.mem_percent(common)
+            Self::MemPercent() => {
+                gi.mem_percent()
             }
-            Self::MemTotal(common) => {
-                gi.mem_total(common)
+            Self::MemTotal() => {
+                gi.mem_total()
             }
-            Self::MemFree(common) => {
-                gi.mem_free(common)
+            Self::MemFree() => {
+                gi.mem_free()
             }
-            Self::SwapUsage(common) => {
-                gi.swap_usage(common)
+            Self::SwapUsage() => {
+                gi.swap_usage()
             }
-            Self::SwapPercent(common) => {
-                gi.swap_percent(common)
+            Self::SwapPercent() => {
+                gi.swap_percent()
             }
-            Self::SwapTotal(common) => {
-                gi.swap_total(common)
+            Self::SwapTotal() => {
+                gi.swap_total()
             }
-            Self::SwapFree(common) => {
-                gi.swap_free(common)
+            Self::SwapFree() => {
+                gi.swap_free()
             }
-            Self::DiskUsage(mnt, common) => {
-                gi.disk_usage(mnt, common)
+            Self::DiskUsage(mnt) => {
+                gi.disk_usage(mnt)
             }
-            Self::DiskPercent(mnt, common) => {
-                gi.disk_percent(mnt, common)
+            Self::DiskPercent(mnt) => {
+                gi.disk_percent(mnt)
             }
-            Self::DiskTotal(mnt, common) => {
-                gi.disk_total(mnt, common)
+            Self::DiskTotal(mnt) => {
+                gi.disk_total(mnt)
             }
-            Self::DiskFree(mnt, common) => {
-                gi.disk_free(mnt, common)
+            Self::DiskFree(mnt) => {
+                gi.disk_free(mnt)
             }
-            Self::NetStats(stat, name, common) => {
-                gi.net_stats(stat, name, common)
+            Self::NetStats(stat, name) => {
+                gi.net_stats(stat, name)
             }
-            Self::NetStatsPerSecond(stat, name, common) => {
-                gi.net_stats_per_second(stat, name, common)
+            Self::NetStatsPerSecond(stat, name) => {
+                gi.net_stats_per_second(stat, name)
             }
             Self::Literal(s) => s.clone(),
             Self::Array(v) => v.iter()
@@ -353,109 +347,109 @@ impl CommandSharedState {
         None
     }
 
-    fn cpu_usage(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
+    fn cpu_usage(&mut self, core: &Option<usize>) -> String {
         let usage = self.cpu(core).get_cpu_usage();
-        format!("{}{:.0}%", common.color(usage), usage)
+        format!("{:.0}%", usage)
     }
 
-    fn cpu_freq(&mut self, core: &Option<usize>, common: &InternalCommandCommon) -> String {
+    fn cpu_freq(&mut self, core: &Option<usize>) -> String {
         // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
         let freq = self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32;
-        format!("{}{:.2}GHz", common.color(freq), freq / 1000.0)
+        format!("{:.2}GHz", freq / 1000.0)
     }
 
-    fn common_usage(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+    fn common_usage(&mut self, info: Option<(u64, u64)>) -> String {
         match info {
-            Some((usage, _total)) => common.color(usage as f64) + &human_readable(usage) + "B",
+            Some((usage, _total)) => human_readable(usage).to_string() + "B",
             None => "???".to_string()
         }
     }
 
-    fn common_percent(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+    fn common_percent(&mut self, info: Option<(u64, u64)>) -> String {
         match info {
             Some((usage, total)) => {
                 let percent = usage as f64 / total as f64 * 100.;
-                format!("{}{:.2}%", common.color(percent) ,percent)
+                format!("{:.2}%", percent)
             }
             None => "???".to_string()
         }
     }
 
-    fn common_total(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+    fn common_total(&mut self, info: Option<(u64, u64)>) -> String {
         match info {
-            Some((_usage, total)) => common.color(total as f64) + &human_readable(total) + "B",
+            Some((_usage, total)) => human_readable(total).to_string() + "B",
             None => "???".to_string()
         }
     }
 
-    fn common_free(&mut self, info: Option<(u64, u64)>, common: &InternalCommandCommon) -> String {
+    fn common_free(&mut self, info: Option<(u64, u64)>) -> String {
         match info {
-            Some((usage, total)) => common.color((total - usage) as f64) + &human_readable(total - usage) + "B",
+            Some((usage, total)) => human_readable(total - usage).to_string() + "B",
             None => "???".to_string()
         }
     }
 
     // Memory
-    fn mem_usage(&mut self, common: &InternalCommandCommon) -> String {
+    fn mem_usage(&mut self) -> String {
         let mem = Some(self.mem());
-        self.common_usage(mem, common)
+        self.common_usage(mem)
     }
 
-    fn mem_percent(&mut self, common: &InternalCommandCommon) -> String {
+    fn mem_percent(&mut self) -> String {
         let mem = Some(self.mem());
-        self.common_percent(mem, common)
+        self.common_percent(mem)
     }
 
-    fn mem_total(&mut self, common: &InternalCommandCommon) -> String {
+    fn mem_total(&mut self) -> String {
         let mem = Some(self.mem());
-        self.common_total(mem, common)
+        self.common_total(mem)
     }
 
-    fn mem_free(&mut self, common: &InternalCommandCommon) -> String {
+    fn mem_free(&mut self) -> String {
         let mem = Some(self.mem());
-        self.common_free(mem, common)
+        self.common_free(mem)
     }
 
     // Swap
-    fn swap_usage(&mut self, common: &InternalCommandCommon) -> String {
+    fn swap_usage(&mut self) -> String {
         let swap = Some(self.swap());
-        self.common_usage(swap, common)
+        self.common_usage(swap)
     }
 
-    fn swap_percent(&mut self, common: &InternalCommandCommon) -> String {
+    fn swap_percent(&mut self) -> String {
         let swap = Some(self.swap());
-        self.common_percent(swap, common)
+        self.common_percent(swap)
     }
 
-    fn swap_total(&mut self, common: &InternalCommandCommon) -> String {
+    fn swap_total(&mut self) -> String {
         let swap = Some(self.swap());
-        self.common_total(swap, common)
+        self.common_total(swap)
     }
 
-    fn swap_free(&mut self, common: &InternalCommandCommon) -> String {
+    fn swap_free(&mut self) -> String {
         let swap = Some(self.swap());
-        self.common_free(swap, common)
+        self.common_free(swap)
     }
 
     // Disk
-    fn disk_usage(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+    fn disk_usage(&mut self, mnt: &String) -> String {
         let disk = self.disk(mnt);
-        self.common_usage(disk, common)
+        self.common_usage(disk)
     }
 
-    fn disk_percent(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+    fn disk_percent(&mut self, mnt: &String) -> String {
         let disk = self.disk(mnt);
-        self.common_percent(disk, common)
+        self.common_percent(disk)
     }
 
-    fn disk_total(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+    fn disk_total(&mut self, mnt: &String) -> String {
         let disk = self.disk(mnt);
-        self.common_total(disk, common)
+        self.common_total(disk)
     }
 
-    fn disk_free(&mut self, mnt: &String, common: &InternalCommandCommon) -> String {
+    fn disk_free(&mut self, mnt: &String) -> String {
         let disk = self.disk(mnt);
-        self.common_free(disk, common)
+        self.common_free(disk)
     }
 
     fn net_stats_raw(&mut self, stat: &NetStatType, name: &Option<String>) -> Option<u64> {
@@ -480,19 +474,18 @@ impl CommandSharedState {
         }
     }
 
-    fn net_stats(&mut self, stat: &NetStatType, name: &Option<String>, common: &InternalCommandCommon) -> String {
+    fn net_stats(&mut self, stat: &NetStatType, name: &Option<String>) -> String {
         let total = self.net_stats_raw(stat, name);
         match total {
-            Some(t) => format!("{}{}", common.color(t as f64), stat.human_readable(t)),
+            Some(t) => format!("{}", stat.human_readable(t)),
             None => "???".to_string()
         }
     }
 
-    fn net_stats_per_second(&mut self, stat: &NetStatType, name: &Option<String>, common: &InternalCommandCommon) -> String {
+    fn net_stats_per_second(&mut self, stat: &NetStatType, name: &Option<String>) -> String {
         let total = self.net_stats_raw(stat, name);
         match total {
-            Some(t) => format!("{}{}/s", common.color(t as f32 / self.net_update_time), 
-                                       stat.human_readable((t as f32 / self.net_update_time) as u64)),
+            Some(t) => format!("{}/s", stat.human_readable((t as f32 / self.net_update_time) as u64)),
             None => "???".to_string()
         }
     }
