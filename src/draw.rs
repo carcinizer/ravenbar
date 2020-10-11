@@ -52,6 +52,10 @@ pub struct DrawableSet {
     pub bright_magenta:  Drawable,
     pub bright_cyan:     Drawable,
     pub bright_white:    Drawable,
+
+    pub warn: f64,
+    pub critical: f64,
+    pub dim: f64
 }
 
 impl DrawFGInfo {
@@ -234,6 +238,10 @@ impl DrawableSet {
             bright_magenta: props.bright_magenta.clone(),
             bright_cyan: props.bright_cyan.clone(),
             bright_white: props.bright_white.clone(),
+
+            warn: props.warn,
+            critical: props.critical,
+            dim: props.dim
         }
     }
 
@@ -307,6 +315,22 @@ impl DrawableSet {
             97 => self.bright_white.clone(),
 
             _ => if isbackground {self.background.clone()} else {self.foreground.clone()}
+        }
+    }
+
+    pub fn value_appearance(&self, value: Option<f64>) -> Option<&Drawable> {
+        match value {
+            None => None,
+            Some(x) => if x >= self.critical {
+                Some(&self.red)
+            }
+            else if x >= self.warn {
+                Some(&self.yellow)
+            }
+            else if x <= self.dim {
+                Some(&self.bright_black)
+            }
+            else {None}
         }
     }
 }

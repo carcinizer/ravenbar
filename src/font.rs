@@ -1,5 +1,6 @@
 
 use crate::draw::{Drawable, DrawableSet};
+use crate::utils::find_human_readable;
 
 use std::error::Error;
 use std::collections::HashMap;
@@ -122,6 +123,9 @@ impl Font {
 
         let fchars = text.nfc().formatted(Some(ds)).collect::<Vec<_>>();
         let mut cursor = 0;
+
+        let value = find_human_readable(fchars.iter().map(|x| x.0));
+        let fg = ds.value_appearance(value);
         
         for (ch, fgc, bgc) in fchars.iter() {
             let glyph = self.glyph(*ch, height);
@@ -133,7 +137,7 @@ impl Font {
                     let px = (x+ix+glyph.x+cursor) as i16;
                     let py = (y+iy+glyph.y) as i16;
                     
-                    let fgpix = fgc.pixel(px, py, maxheight);
+                    let fgpix = fg.unwrap_or(fgc).pixel(px, py, maxheight);
                     let bgpix = bgc.pixel(px, py, maxheight);
                     
                     let factor =  (glyph.bitmap[(iy*glyph.w+ix) as usize] as f32) / 255.0;

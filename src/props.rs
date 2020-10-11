@@ -136,6 +136,10 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
     bright_cyan:    Drawable from String = Drawable::from("#00FFFF".to_string()),
     bright_white:   Drawable from String = Drawable::from("#FFFFFF".to_string()),
 
+    warn:           f64 from f64 = f64::MAX,
+    critical:       f64 from f64 = f64::MAX,
+    dim:            f64 from f64 = f64::MIN,
+
     command:        Command from Value = Command::None,
     action:         Command from Value = Command::None,
     border_factor:  f32 from f32 = 0.75,
