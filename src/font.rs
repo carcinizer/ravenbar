@@ -1,5 +1,5 @@
 
-use crate::draw::{Drawable, DrawableSet};
+use crate::draw::{Color, Drawable, DrawableSet};
 use crate::utils::find_human_readable;
 
 use std::error::Error;
@@ -28,9 +28,23 @@ pub struct Glyph {
     y: u16,
     w: u16,
     h: u16,
+    pitch: u16,
     advx: u16,
-    advy: u16
 }
+
+#[derive(Debug)]
+enum FontError {
+    NonScalable(String)
+}
+impl Error for FontError {}
+impl std::fmt::Display for FontError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::NonScalable(s) => write!(f, "Font {} is not scalable", s)
+        }
+    }
+}
+
 
 /// TODO subpixel handling
 impl Font {
@@ -38,6 +52,10 @@ impl Font {
         let fontpath = fu.fc.find(name, None).unwrap().path;
 
         let face = fu.lib.new_face(fontpath,0)?;
+
+        if !face.is_scalable() {
+            return Err(Box::new(FontError::NonScalable(name.to_string())));
+        }
 
         Ok( Self {face, glyphs: HashMap::new(), baseline: HashMap::new()} )
     }
@@ -48,10 +66,10 @@ impl Font {
             Some(_) => None,
             None => Some({
 
-                self.face.set_pixel_sizes(0, height as _).expect("Failed to set font size");
+                self.face.set_pixel_sizes(0, height as _).unwrap();
 
                 "gjpqy".chars().map( |ch| {
-                    self.face.load_char(ch as _, LoadFlag::RENDER).unwrap();
+                    self.face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
                     
                     let ftglyph = self.face.glyph();
                     ftglyph.bitmap().rows() - ftglyph.bitmap_top()
@@ -77,8 +95,8 @@ impl Font {
             Some(_) => None,
             None => {
 
-                self.face.set_pixel_sizes(0, height as _).expect("Failed to set font size");
-                self.face.load_char(ch as _, LoadFlag::RENDER).unwrap();
+                self.face.set_pixel_sizes(0, height as _).unwrap();
+                self.face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
 
                 let ftglyph = self.face.glyph();
 
@@ -87,9 +105,9 @@ impl Font {
                     x: (ftglyph.bitmap_left()) as u16,
                     y: baseline - (ftglyph.bitmap_top()) as u16,
                     advx: (ftglyph.advance().x / 64) as u16,
-                    advy: (ftglyph.advance().y / 64) as u16,
-                    w: ftglyph.bitmap().width() as u16,
+                    w: ftglyph.bitmap().width() as u16 / 3,
                     h: ftglyph.bitmap().rows() as u16,
+                    pitch: ftglyph.bitmap().pitch() as u16,
                 })
             }
         };
@@ -140,10 +158,10 @@ impl Font {
                     let fgpix = fg.unwrap_or(fgc).pixel(px, py, maxheight);
                     let bgpix = bgc.pixel(px, py, maxheight);
                     
-                    let factor =  (glyph.bitmap[(iy*glyph.w+ix) as usize] as f32) / 255.0;
-                    let color = &bgpix.mix(&fgpix, factor);
+                    let factor = glyph.pixel(ix,iy);
 
                     for i in 0..3 {
+                        let color = &bgpix.mix(&fgpix, factor.get(i) as f32 / 255.0);
                         v[bgindex*4+i] = color.get(i);
                     }
                 }
@@ -219,6 +237,14 @@ impl<T> Formatted<T> for T
             None => (Drawable::from("#FFFFFF".to_string()), Drawable::from("#FFFFFF".to_string()))
         };
         FormattedTextIter { chars: self, ds, fg, bg}
+    }
+}
+
+impl Glyph {
+    fn pixel(&self, x: u16, y: u16) -> Color {
+        let pos = (y*self.pitch+x*3) as usize;
+        let rgb = self.bitmap.get(pos..(pos+3)).unwrap();
+        Color::new(rgb[0], rgb[1], rgb[2], rgb[0] + rgb[1] + rgb[2] / 3)
     }
 }
 
