@@ -1,544 +1,161 @@
 
-use crate::config::config_dir;
-use crate::utils::{human_readable, human_readable_p10};
+use std::collections::HashMap;
+use std::any::{Any, TypeId};
 
-use std::time::Instant;
+use serde_json::{Value, from_value};
+use serde::Deserialize;
+use dyn_clone::DynClone;
 
-use sysinfo::{System, SystemExt as _, ProcessorExt as _, NetworkExt, DiskExt as _};
-use serde_json::Value;
+mod common;
+mod sysinfo;
 
+// Helper trait to support PartialEq for dynamic objects
+pub trait DynPartialEq: 'static + Any {
+    fn dyneq(&self, other: &dyn Any) -> bool;
+}
 
+// A general trait for commands, concrete implementations are in command/ directory
+pub trait CommandTrait: 'static + Any + DynClone + DynPartialEq {
+    fn execute(&self,  state: &mut CommandSharedState) -> String;
+    fn updated(&self, _state: &mut CommandSharedState) -> bool {
+        false
+    }
+}
+dyn_clone::clone_trait_object!(CommandTrait);
+
+// Provides a way to create/access shared structures of commands
 pub struct CommandSharedState {
-    system: System,
-    
-    last_cpu: Option<Instant>,
-    last_mem: Option<Instant>,
-    last_net: Option<Instant>,
-    last_disks: Option<Instant>,
-    net_update_time: f32
+    parts: HashMap<(TypeId, u64), Box<dyn Any>>
 }
 
-#[derive(PartialEq, Clone)]
-pub struct InternalCommandCommon {
-    warn: Option<f64>,
-    critical: Option<f64>,
-    dim: Option<f64>
+// A command container used in other program structs
+#[derive(Clone)]
+pub struct Command {
+    cmd: Box<dyn CommandTrait>
 }
 
-#[derive(PartialEq, Clone)]
-pub enum NetStatType {
-    Download,
-    Upload,
-    DownloadPackets,
-    UploadPackets,
-    DownloadErrors,
-    UploadErrors,
-
-    DownloadTotal,
-    UploadTotal,
-    DownloadPacketsTotal,
-    UploadPacketsTotal,
-    DownloadErrorsTotal,
-    UploadErrorsTotal,
+// Wrapper for JSON object
+#[derive(Debug, Deserialize)]
+struct CommandObject {
+    r#type: Option<String>,
+    core: Option<usize>,
+    network: Option<String>,
+    mountpoint: Option<String>
 }
 
-#[derive(PartialEq, Clone)]
-pub enum Command {
-    None,
-    Shell(String),
-    Literal(String),
-    Array(Vec<Command>),
-    
-    CPUUsage(Option<usize>),
-    CPUFreq(Option<usize>),
-
-    MemUsage(),
-    MemPercent(),
-    MemTotal(),
-    MemFree(),
-    
-    SwapUsage(),
-    SwapPercent(),
-    SwapTotal(),
-    SwapFree(),
-
-    DiskUsage(String),
-    DiskPercent(String),
-    DiskTotal(String),
-    DiskFree(String),
-    
-    NetStats(NetStatType, Option<String>),
-    NetStatsPerSecond(NetStatType, Option<String>)
-}
-
-impl Command {
-    pub fn from(v: Value) -> Self {
-        match v {
-            Value::String(s) => {
-                match s.chars().find(|x| !x.is_whitespace()) {
-                    Some(c) => match c {
-                        '#' => Self::Literal(s.chars().skip_while(|x| x.is_whitespace() || *x == '#').collect()),
-                        _ => Self::Shell(s)
-                    }
-                    None => Self::None
-                }
-            }
-            Value::Array(v) => Self::Array(v.iter()
-                                            .map(|s| Command::from(s.to_owned()))
-                                            .collect()),
-            Value::Object(obj) => {
-                if let Some(Value::String(t)) = obj.get("type") {
-
-                    let get_number = |x| match obj.get(x) {
-                        Some(Value::Number(x)) => Some(x.as_f64()
-                            .expect(&format!("{} must be a number", x))),
-                        Some(_) =>  {panic!("{} must be a number", x)}
-                        None => None
-                    };
-
-                    let core = match get_number("core") {
-                        Some(x) => Some(x as _),
-                        None => None
-                    };
-
-                    let network = match obj.get("network_name") {
-                        Some(Value::String(s)) => Some(s.to_owned()),
-                        Some(_) => panic!("network_name must be a string"),
-                        None => None
-                    };
-
-                    let mountpoint = match obj.get("mountpoint") {
-                        Some(Value::String(s)) => s.to_owned(),
-                        Some(_) => panic!("mountpoint must be a string"),
-                        None => "ERR".to_string()
-                    };
-
-                    match &t[..] {
-                        "cpu_usage" => Self::CPUUsage(core),
-                        "cpu_freq" => Self::CPUFreq(core),
-
-                        "mem_usage" => Self::MemUsage(),
-                        "mem_percent" => Self::MemPercent(),
-                        "mem_total" => Self::MemTotal(),
-                        "mem_free" => Self::MemFree(),
-                        
-                        "swap_usage" => Self::SwapUsage(),
-                        "swap_percent" => Self::SwapPercent(),
-                        "swap_total" => Self::SwapTotal(),
-                        "swap_free" => Self::SwapFree(),
-                        
-                        "disk_usage" => Self::DiskUsage(mountpoint),
-                        "disk_percent" => Self::DiskPercent(mountpoint),
-                        "disk_total" => Self::DiskTotal(mountpoint),
-                        "disk_free" => Self::DiskFree(mountpoint),
-
-                        "net_download" =>               Self::NetStatsPerSecond(NetStatType::Download, network),
-                        "net_upload" =>                 Self::NetStatsPerSecond(NetStatType::Upload, network),
-                        "net_download_packets" =>       Self::NetStatsPerSecond(NetStatType::DownloadPackets, network),
-                        "net_upload_packets" =>         Self::NetStatsPerSecond(NetStatType::UploadPackets, network),
-                        "net_download_errors" =>        Self::NetStatsPerSecond(NetStatType::DownloadErrors, network),
-                        "net_upload_errors" =>          Self::NetStatsPerSecond(NetStatType::UploadErrors, network),
-
-                        "net_download_since" =>         Self::NetStats(NetStatType::Download, network),
-                        "net_upload_since" =>           Self::NetStats(NetStatType::Upload, network),
-                        "net_download_packets_since" => Self::NetStats(NetStatType::DownloadPackets, network),
-                        "net_upload_packets_since" =>   Self::NetStats(NetStatType::UploadPackets, network),
-                        "net_download_errors_since" =>  Self::NetStats(NetStatType::DownloadErrors, network),
-                        "net_upload_errors_since" =>    Self::NetStats(NetStatType::UploadErrors, network),
-
-                        "net_download_total" =>         Self::NetStats(NetStatType::DownloadTotal, network),
-                        "net_upload_total" =>           Self::NetStats(NetStatType::UploadTotal, network),
-                        "net_download_packets_total" => Self::NetStats(NetStatType::DownloadPacketsTotal, network),
-                        "net_upload_packets_total" =>   Self::NetStats(NetStatType::UploadPacketsTotal, network),
-                        "net_download_errors_total" =>  Self::NetStats(NetStatType::DownloadErrorsTotal, network),
-                        "net_upload_errors_total" =>    Self::NetStats(NetStatType::UploadErrorsTotal, network),
-
-                        _ => {panic!("Command type '{}' not available", t)}
-                    }
-                }
-                else {
-                    panic!("'type' property of command must exist if it's an object");
-                }
-            }
-            _ => panic!("'command' must be either a string, an object with a required value 'type' or an array of those")
+// Implement DynPartialEq for PartialEq so that we only need to use derive macro to support it
+impl<T: Any + 'static + PartialEq> DynPartialEq for T {
+    fn dyneq(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<T>() {
+            Some(x) => self == x,
+            None => false
         }
     }
+}
 
-    pub fn execute(&self, gi: &mut CommandSharedState) -> String {
-        match self {
-            Self::Shell(s) => {
-
-                let mut options = run_script::ScriptOptions::new();
-                options.working_directory = Some(config_dir());
-
-                let (code, output, error) = run_script::run_script!(s, options)
-                    .expect("Failed to run shell script");
-
-                if code != 0 {
-                    eprintln!("WARNING: '{}' returned {}", s, code);
-                }
-                if !error.chars()
-                    .filter(|x| !x.is_control())
-                    .eq(std::iter::empty()) {
-                    
-                    eprintln!("WARNING: '{}' wrote to stderr:", s);
-                    eprintln!("{}", error);
-                }
-                output
-            }
-            Self::CPUUsage(core) => {
-                gi.cpu_usage(core)
-            }
-            Self::CPUFreq(core) => {
-                gi.cpu_freq(core)
-            }
-            Self::MemUsage() => {
-                gi.mem_usage()
-            }
-            Self::MemPercent() => {
-                gi.mem_percent()
-            }
-            Self::MemTotal() => {
-                gi.mem_total()
-            }
-            Self::MemFree() => {
-                gi.mem_free()
-            }
-            Self::SwapUsage() => {
-                gi.swap_usage()
-            }
-            Self::SwapPercent() => {
-                gi.swap_percent()
-            }
-            Self::SwapTotal() => {
-                gi.swap_total()
-            }
-            Self::SwapFree() => {
-                gi.swap_free()
-            }
-            Self::DiskUsage(mnt) => {
-                gi.disk_usage(mnt)
-            }
-            Self::DiskPercent(mnt) => {
-                gi.disk_percent(mnt)
-            }
-            Self::DiskTotal(mnt) => {
-                gi.disk_total(mnt)
-            }
-            Self::DiskFree(mnt) => {
-                gi.disk_free(mnt)
-            }
-            Self::NetStats(stat, name) => {
-                gi.net_stats(stat, name)
-            }
-            Self::NetStatsPerSecond(stat, name) => {
-                gi.net_stats_per_second(stat, name)
-            }
-            Self::Literal(s) => s.clone(),
-            Self::Array(v) => v.iter()
-                               .map(|c| c.execute(gi))
-                               .collect::<Vec<String>>()
-                               .join(""),
-            Self::None => String::new(),
-        }
+impl PartialEq for Command {
+    fn eq(&self, other: &Self) -> bool {
+        other.cmd.dyneq(&self.cmd)
     }
+}
+
+impl CommandTrait for Command {
+    fn execute(&self, state: &mut CommandSharedState) -> String {self.cmd.execute(state)}
+    fn updated(&self, state: &mut CommandSharedState) -> bool {self.cmd.updated(state)}
 }
 
 impl CommandSharedState {
-    pub fn new() -> Self {
-        Self {
-            system: sysinfo::System::new(),
+    pub fn new() -> Self { Self {parts: HashMap::new()}}
 
-            last_cpu: None,
-            last_mem: None,
-            last_net: None,
-            last_disks: None,
+    // Access a singleton or create one if it doesn't exist
+    pub fn get<T: Any + Default>(&mut self, id: u64) -> &mut T {
+        self.parts.entry((TypeId::of::<T>(), id))
+            .or_insert_with( || Box::new(T::default()) )
+            .downcast_mut::<T>().unwrap()
+    }
+}
+
+
+impl From<Value> for Command {
+    fn from(val: Value) -> Self {
+        Self { cmd: new_command(val) }
+    }
+}
+
+fn new_command(val: Value) -> Box<dyn CommandTrait> {
+    match val {
+        Value::String(s) => {
+            match s.chars().find(|x| !x.is_whitespace()) {
+                Some(c) => match c {
+                    '#' => Box::new(common::LiteralCommand(
+                               s.chars().skip_while(|x| x.is_whitespace() || *x == '#')
+                           .collect())),
+                    _ => Box::new(common::ShellCommand(s))
+                }
+                None => Box::new(common::NoneCommand)
+            }
+        }
+        Value::Array(v) => Box::new(common::MultiCommand(v.iter()
+                        .map(|s| Command {cmd: new_command(s.to_owned())})
+                        .collect())),
+        Value::Object(obj) => {
+            let object: CommandObject = from_value(Value::Object(obj)).unwrap();
             
-            net_update_time: f32::MAX
-        }
-    }
-    
-    fn refresh_cpu(&mut self) {
-        let update = if let Some(i) = self.last_cpu {
-            i.elapsed().as_millis() > 30
-        }
-        else {true};
-
-        if update {
-            self.system.refresh_cpu();
-            self.last_cpu = Some(Instant::now()); 
-        }
-    }
-
-    fn refresh_mem(&mut self) {
-        let update = if let Some(i) = self.last_mem {
-            i.elapsed().as_millis() > 30
-        }
-        else {true};
-
-        if update {
-            self.system.refresh_memory();
-            self.last_mem = Some(Instant::now()); 
-        }
-    }
-
-    fn refresh_net(&mut self) {
-        let update = if let Some(i) = self.last_net {
-            i.elapsed().as_millis() > 30
-        }
-        else {
-            self.system.refresh_networks_list();
-            true
-        };
-
-        if update {
-            self.system.refresh_networks();
-            self.net_update_time = self.last_net.unwrap_or(Instant::now())
-                                       .elapsed().as_millis() as f32 / 1000.0;
-            self.last_net = Some(Instant::now()); 
-        }
-    }
-
-    fn refresh_disks(&mut self) {
-        let update = if let Some(i) = self.last_disks {
-            i.elapsed().as_millis() > 30
-        }
-        else {
-            self.system.refresh_disks_list();
-            true
-        };
-
-        if update {
-            self.system.refresh_disks();
-            self.last_disks = Some(Instant::now()); 
-        }
-    }
-
-    fn cpu(&mut self, core: &Option<usize>) -> &sysinfo::Processor {
-        self.refresh_cpu();
-        
-        match core {
-            Some(c) => {
-                let a = self.system.get_processors();
-                if a.len() <= *c {panic!("CPU doesn't have core {}", c)};
-                &a[*c]
+            if let Some(t) = object.r#type {
+                
+                let words = t.split("_").collect::<Vec<_>>();
+                
+                match words.get(0) {
+                    Some(&"cpu") => match words.get(1) {
+                        Some(&"usage") => Box::new(sysinfo::CPUUsageCommand(object.core)),
+                        Some(&"freq")  => Box::new(sysinfo::CPUFreqCommand(object.core)),
+                        _ => panic!("Unknown command type {}", t)
+                    }
+                    Some(&"mem") | Some(&"swap") | Some(&"disk") => {
+                        let ty = match words.get(0) {
+                            Some(&"mem") => sysinfo::MemoryInfoType::RAM,
+                            Some(&"swap") => sysinfo::MemoryInfoType::Swap,
+                            Some(&"disk") => sysinfo::MemoryInfoType::Disk(object.mountpoint),
+                            _ => panic!("Unknown command type {}", t)
+                        };
+                        let val = match words.get(1) {
+                            Some(&"usage") => sysinfo::MemoryInfoValue::Usage,
+                            Some(&"percent") => sysinfo::MemoryInfoValue::Percent,
+                            Some(&"total") => sysinfo::MemoryInfoValue::Total,
+                            Some(&"free") => sysinfo::MemoryInfoValue::Free,
+                            _ => panic!("Unknown command type {}", t)
+                        };
+                        Box::new(sysinfo::MemoryInfoCommand {ty, val})
+                    }
+                    Some(&"net") => {
+                        let ty = match words.get(1) {
+                            Some(&"upload") => sysinfo::NetInfoType::Upload,
+                            Some(&"download") => sysinfo::NetInfoType::Download,
+                            _ => panic!("Unknown command type {}", t)
+                        };
+                        let val = match words.get(2) {
+                            Some(&"bits") => sysinfo::NetInfoValue::Bits,
+                            Some(&"bytes") => sysinfo::NetInfoValue::Bytes,
+                            Some(&"packets") => sysinfo::NetInfoValue::Packets,
+                            Some(&"errors") => sysinfo::NetInfoValue::Errors,
+                            _ => panic!("Unknown command type {}", t)
+                        };
+                        let time = match words.get(3) {
+                            Some(&"since") => sysinfo::NetInfoTime::Since,
+                            Some(&"total") => sysinfo::NetInfoTime::Total,
+                            None => sysinfo::NetInfoTime::PerSecond,
+                            _ => panic!("Unknown command type {}", t)
+                        };
+                        Box::new(sysinfo::NetInfoCommand {ty,val,time, name: object.network})
+                    }
+                    _ => panic!("Unknown command type {}", t)
+                }
             }
-            None => self.system.get_global_processor_info()
-        }
-    }
-
-    fn mem(&mut self) -> (u64, u64) {
-        self.refresh_mem();
-        (self.system.get_used_memory() * 1000, self.system.get_total_memory() * 1000)
-    }
-
-    fn swap(&mut self) -> (u64, u64) {
-        self.refresh_mem();
-        (self.system.get_used_swap() * 1000, self.system.get_total_swap() * 1000)
-    }
-
-    fn disk(&mut self, mnt: &String) -> Option<(u64, u64)> {
-        self.refresh_disks();
-        for i in self.system.get_disks() {
-            if i.get_mount_point() == config_dir().join(mnt) {
-                return Some((i.get_total_space() - i.get_available_space(), i.get_total_space()));
+            else {
+                panic!("'type' property of command must exist if it's an object (command: {:#?})", object);
             }
         }
-        None
-    }
-
-    fn cpu_usage(&mut self, core: &Option<usize>) -> String {
-        let usage = self.cpu(core).get_cpu_usage();
-        format!("{:.0}%", usage)
-    }
-
-    fn cpu_freq(&mut self, core: &Option<usize>) -> String {
-        // Getting frequency for "global processor" reports 0, use core 0 freq as a fallback
-        let freq = self.cpu(&Some(core.unwrap_or(0))).get_frequency() as f32;
-        format!("{:.2}GHz", freq / 1000.0)
-    }
-
-    fn common_usage(&mut self, info: Option<(u64, u64)>) -> String {
-        match info {
-            Some((usage, _total)) => human_readable(usage).to_string() + "B",
-            None => "???".to_string()
-        }
-    }
-
-    fn common_percent(&mut self, info: Option<(u64, u64)>) -> String {
-        match info {
-            Some((usage, total)) => {
-                let percent = usage as f64 / total as f64 * 100.;
-                format!("{:.2}%", percent)
-            }
-            None => "???".to_string()
-        }
-    }
-
-    fn common_total(&mut self, info: Option<(u64, u64)>) -> String {
-        match info {
-            Some((_usage, total)) => human_readable(total).to_string() + "B",
-            None => "???".to_string()
-        }
-    }
-
-    fn common_free(&mut self, info: Option<(u64, u64)>) -> String {
-        match info {
-            Some((usage, total)) => human_readable(total - usage).to_string() + "B",
-            None => "???".to_string()
-        }
-    }
-
-    // Memory
-    fn mem_usage(&mut self) -> String {
-        let mem = Some(self.mem());
-        self.common_usage(mem)
-    }
-
-    fn mem_percent(&mut self) -> String {
-        let mem = Some(self.mem());
-        self.common_percent(mem)
-    }
-
-    fn mem_total(&mut self) -> String {
-        let mem = Some(self.mem());
-        self.common_total(mem)
-    }
-
-    fn mem_free(&mut self) -> String {
-        let mem = Some(self.mem());
-        self.common_free(mem)
-    }
-
-    // Swap
-    fn swap_usage(&mut self) -> String {
-        let swap = Some(self.swap());
-        self.common_usage(swap)
-    }
-
-    fn swap_percent(&mut self) -> String {
-        let swap = Some(self.swap());
-        self.common_percent(swap)
-    }
-
-    fn swap_total(&mut self) -> String {
-        let swap = Some(self.swap());
-        self.common_total(swap)
-    }
-
-    fn swap_free(&mut self) -> String {
-        let swap = Some(self.swap());
-        self.common_free(swap)
-    }
-
-    // Disk
-    fn disk_usage(&mut self, mnt: &String) -> String {
-        let disk = self.disk(mnt);
-        self.common_usage(disk)
-    }
-
-    fn disk_percent(&mut self, mnt: &String) -> String {
-        let disk = self.disk(mnt);
-        self.common_percent(disk)
-    }
-
-    fn disk_total(&mut self, mnt: &String) -> String {
-        let disk = self.disk(mnt);
-        self.common_total(disk)
-    }
-
-    fn disk_free(&mut self, mnt: &String) -> String {
-        let disk = self.disk(mnt);
-        self.common_free(disk)
-    }
-
-    fn net_stats_raw(&mut self, stat: &NetStatType, name: &Option<String>) -> Option<u64> {
-        self.refresh_net();
-
-        let (mut total, mut present) = (0, false);
-        for (netname, network) in self.system.get_networks() {
-            let count = match name {
-                Some(n) => n == netname,
-                None => true
-            };
-
-            if count {
-                total += stat.get_from(network);
-                present = true;
-            }
-        }
-
-        match present {
-            true => Some(total),
-            false => None
-        }
-    }
-
-    fn net_stats(&mut self, stat: &NetStatType, name: &Option<String>) -> String {
-        let total = self.net_stats_raw(stat, name);
-        match total {
-            Some(t) => format!("{}", stat.human_readable(t)),
-            None => "???".to_string()
-        }
-    }
-
-    fn net_stats_per_second(&mut self, stat: &NetStatType, name: &Option<String>) -> String {
-        let total = self.net_stats_raw(stat, name);
-        match total {
-            Some(t) => format!("{}/s", stat.human_readable((t as f32 / self.net_update_time) as u64)),
-            None => "???".to_string()
-        }
+        _ => panic!("'command' must be either a string, an object with a required value 'type' or an array of those")
     }
 }
 
-impl InternalCommandCommon {
-    fn color(&self, n: impl Into<f64>) -> String {
-        let n = n.into();
-        if n >= self.critical.unwrap_or(f64::MAX) {
-            // Red
-            "\x1b[31m".to_owned()
-        }
-        else if n >= self.warn.unwrap_or(f64::MAX) {
-            // Yellow
-            "\x1b[33m".to_owned()
-        }
-        else if n >= self.dim.unwrap_or(f64::MIN) {
-            // Default
-            "".to_owned()
-        }
-        else {
-            // Gray
-            "\x1b[90m".to_owned()
-        }
-    }
-}
-
-impl NetStatType {
-    fn get_from(&self, n: &impl NetworkExt) -> u64 {
-        match self {
-            Self::Download => n.get_received(),
-            Self::Upload => n.get_transmitted(),
-            Self::DownloadPackets => n.get_packets_received(),
-            Self::UploadPackets => n.get_packets_transmitted(),
-            Self::DownloadErrors => n.get_errors_on_received(),
-            Self::UploadErrors => n.get_errors_on_transmitted(),
-
-            Self::DownloadTotal => n.get_total_received(),
-            Self::UploadTotal => n.get_total_transmitted(),
-            Self::DownloadPacketsTotal => n.get_total_packets_received(),
-            Self::UploadPacketsTotal => n.get_total_packets_transmitted(),
-            Self::DownloadErrorsTotal => n.get_total_errors_on_received(),
-            Self::UploadErrorsTotal => n.get_total_errors_on_transmitted(),
-        }
-    }
-
-    fn human_readable(&self, n: u64) -> String {
-        match self {
-            Self::Download      => human_readable(n) + "B",
-            Self::Upload        => human_readable(n) + "B",
-            Self::DownloadTotal => human_readable(n) + "B",
-            Self::UploadTotal   => human_readable(n) + "B",
-            _ => human_readable_p10(n),
-        }
-    }
-}

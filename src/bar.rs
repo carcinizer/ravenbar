@@ -3,7 +3,7 @@ use crate::props::*;
 use crate::window::*;
 use crate::event::Event;
 use crate::font::Font;
-use crate::command::CommandSharedState;
+use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo, draw_widget};
 

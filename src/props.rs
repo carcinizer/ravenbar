@@ -140,8 +140,8 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
     critical:       f64 from f64 = f64::MAX,
     dim:            f64 from f64 = f64::MIN,
 
-    command:        Command from Value = Command::None,
-    action:         Command from Value = Command::None,
+    command:        Command from Value = Command::from(Value::String("".to_string())),
+    action:         Command from Value = Command::from(Value::String("".to_string())),
     border_factor:  f32 from f32 = 0.75,
     interval:       f32 from f32 = 5.0
 );
