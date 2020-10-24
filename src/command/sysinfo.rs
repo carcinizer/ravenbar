@@ -135,19 +135,6 @@ macro_rules! refresh {($last:expr, $refresh:expr) => {{
 
 impl SystemSingleton {
 
-    fn refresh(last: &mut Option<Instant>, f: impl Fn() -> ()) {
-        
-        let update = if let Some(i) = last {
-            i.elapsed().as_millis() > 30
-        }
-        else {true};
-
-        if update {
-            f();
-            *last = Some(Instant::now()); 
-        }
-    }
-    
     fn refresh_cpu(&mut self) {
         refresh!(self.last_cpu, self.system.refresh_cpu())
     }
@@ -158,9 +145,12 @@ impl SystemSingleton {
         refresh!(self.last_disks, self.system.refresh_disks())
     }
     fn refresh_net(&mut self) {
+        if let None = self.last_net {
+            self.system.refresh_networks_list();
+        }
         self.net_update_time = self.last_net.unwrap_or(Instant::now())
                                    .elapsed().as_millis() as f64 / 1000.0;
-        refresh!(self.last_mem, || self.system.refresh_networks())
+        refresh!(self.last_mem, self.system.refresh_networks())
     }
 
     fn cpu_usage(&mut self, core: &Option<usize>) -> f32 {
