@@ -24,8 +24,8 @@ pub struct Font {
 
 pub struct Glyph {
     bitmap: Vec<u8>,
-    x: u16,
-    y: u16,
+    x: i16,
+    y: i16,
     w: u16,
     h: u16,
     pitch: u16,
@@ -102,8 +102,8 @@ impl Font {
 
                 Some(Glyph {
                     bitmap: Vec::from(ftglyph.bitmap().buffer()),
-                    x: (ftglyph.bitmap_left()) as u16,
-                    y: baseline - (ftglyph.bitmap_top()) as u16,
+                    x: ftglyph.bitmap_left() as i16,
+                    y: baseline as i16 - (ftglyph.bitmap_top()) as i16,
                     advx: (ftglyph.advance().x / 64) as u16,
                     w: ftglyph.bitmap().width() as u16 / 3,
                     h: ftglyph.bitmap().rows() as u16,
@@ -150,19 +150,33 @@ impl Font {
 
             for iy in 0..(glyph.h) {
                 for ix in 0..(glyph.w) {
-                    let bgindex = ((iy+glyph.y)*width+ix+glyph.x+cursor) as usize;
 
-                    let px = (x+ix+glyph.x+cursor) as i16;
-                    let py = (y+iy+glyph.y) as i16;
+                    let x = x as usize;
+                    let y = y as usize;
+                    let ix = ix as usize;
+                    let iy = iy as usize;
+                    let gx = glyph.x as usize;
+                    let gy = glyph.y as usize;
+                    let cur = cursor as usize;
+                    let w = width as usize;
+
+                    let bgindex = ((iy+gy)*w+ix+gx+cur) as usize;
+
+                    let px = (x+ix+gx+cur) as i16;
+                    let py = (y+iy+gy) as i16;
                     
                     let fgpix = fg.unwrap_or(fgc).pixel(px, py, maxheight);
                     let bgpix = bgc.pixel(px, py, maxheight);
                     
-                    let factor = glyph.pixel(ix,iy);
+                    let factor = glyph.pixel(ix as u16, iy as u16);
 
                     for i in 0..3 {
                         let color = &bgpix.mix(&fgpix, factor.get(i) as f32 / 255.0);
-                        v[bgindex*4+i] = color.get(i);
+                        if v.len() > bgindex*4+i {
+                        v[bgindex*4+i] = color.get(i);}
+                        else {
+                            eprintln!("x{} y{} ix{} iy{} gx{} gy{} cur{} w{}", x, y,ix,iy,gx,gy,cur,w);
+                        }
                     }
                 }
             }
@@ -244,7 +258,8 @@ impl Glyph {
     fn pixel(&self, x: u16, y: u16) -> Color {
         let pos = (y*self.pitch+x*3) as usize;
         let rgb = self.bitmap.get(pos..(pos+3)).unwrap();
-        Color::new(rgb[0], rgb[1], rgb[2], rgb[0] + rgb[1] + rgb[2] / 3)
+        let avg = (rgb[0] as u16 + rgb[1] as u16 + rgb[2] as u16 / 3 as u16) as u8;
+        Color::new(rgb[0], rgb[1], rgb[2], avg)
     }
 }
 
