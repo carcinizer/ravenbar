@@ -85,12 +85,12 @@ impl From<Value> for Command {
 fn new_command(val: Value) -> Box<dyn CommandTrait> {
     match val {
         Value::String(s) => {
-            match s.chars().find(|x| !x.is_whitespace()) {
+            let mut rem = s.chars().skip_while(|x| x.is_whitespace());
+            match rem.next() {
                 Some(c) => match c {
-                    '#' => Box::new(common::LiteralCommand(
-                               s.chars().skip_while(|x| x.is_whitespace() || *x == '#')
-                           .collect())),
-                    _ => Box::new(common::ShellCommand(s))
+                    '#' => Box::new(common::LiteralCommand(rem.collect())),
+                    '|' => Box::new(common::PipeCommand(rem.collect())),
+                     _  => Box::new(common::ShellCommand(s))
                 }
                 None => Box::new(common::NoneCommand)
             }
