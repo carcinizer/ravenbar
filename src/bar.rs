@@ -125,7 +125,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             // Update widget text
             if force || i.last_time_updated.elapsed().as_millis() > (props.interval * 1000.0) as u128
-                     || i.last_event_updated != i.props.command.get_event(e,m) {
+                     || i.last_event_updated != i.props.command.get_event(e,m) 
+                     || props.command.updated(&mut self.cmdginfo) {
                      
                 let new_cmd_out = props.command.execute(&mut self.cmdginfo);
                 i.last_time_updated = Instant::now();
