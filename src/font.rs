@@ -173,9 +173,7 @@ impl Font {
                     for i in 0..3 {
                         let color = &bgpix.mix(&fgpix, factor.get(i) as f32 / 255.0);
                         if v.len() > bgindex*4+i {
-                        v[bgindex*4+i] = color.get(i);}
-                        else {
-                            eprintln!("x{} y{} ix{} iy{} gx{} gy{} cur{} w{}", x, y,ix,iy,gx,gy,cur,w);
+                            v[bgindex*4+i] = color.get(i);
                         }
                     }
                 }
