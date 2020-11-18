@@ -147,7 +147,10 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             // New widget width
             let width = i.drawinfo.width;
-            let avg_char_width: u16 = width as u16 / i.cmd_out.len() as u16;
+            let avg_char_width = if i.cmd_out.len() != 0 {
+                width as u16 / i.cmd_out.len() as u16
+            } else {1};
+
             if width > i.width_max || width < i.width_min {
                 i.width_min = width - avg_char_width * 2;
                 i.width_max = width + avg_char_width * 2;
