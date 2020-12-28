@@ -39,6 +39,8 @@ pub struct Bar<'a, T: XConnection> {
     current: BarPropsCurrent,
 
     offset: i16,
+    middle_left: i16,
+    middle_right: i16,
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
@@ -81,7 +83,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
             current,
             cmdginfo: CommandSharedState::new(),
             default_bg: Drawable::from(cfg.default_bg),
-            offset: 0
+            offset: 0,
+            middle_left: 10000,
+            middle_right: 0
         };
         bar.refresh(vec![Event::Default], true, 0, 0)?;
         Ok(bar)
@@ -92,7 +96,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
         events: &Vec<Event>, 
         force: bool, 
         bar_redraw: bool, 
-        offset: i16,
         mx: i16, my: i16) -> i16 
     {
         let mut widget_cursor = 0;
@@ -111,7 +114,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             // Determine if mouse is inside widget
             let m = self.fake_geometry
                 .has_point_cropped(mx, my, self.window.screen_width(), self.window.screen_height(),
-                                   i.last_x + offset, 0, i.width_max, height);
+                                   i.last_x, 0, i.width_max, height);
 
             // Get widget props and determine whether they changed
             let new_current = i.props.as_current(e,m);
@@ -181,8 +184,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
         else {false};
 
         // Refresh widgets & calculate width
-        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, 0, mx, my);
-        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, self.offset, mx, my);
+        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, mx, my);
+        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, mx, my);
 
         let bar = &self.current;
         let height = bar.height;
@@ -190,6 +193,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let minwidth = (self.window.screen_width() as f32 * bar.screenwidth) as i16;
         let width = minwidth.max(width_left + width_right);
         self.offset = width - width_right;
+
+        let new_middle_left = width_left;
+        let new_middle_right = self.offset;
 
         // Recalculate geometry
         let next_geom = WindowGeometry {
@@ -214,8 +220,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
         // Redraw on exposure
         else {events.iter().find(|x| **x == Event::Expose) != None};
 
-        let mut middle_redraw = global_redraw;
-
         // Redraw left widgets
         for i in self.widgets_left.iter_mut() {
 
@@ -224,7 +228,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 let ds = DrawableSet::from(&i.current);
 
                 draw_widget(self.window, &i.drawinfo, 0, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
-                middle_redraw = true;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -232,21 +235,34 @@ impl<'a, T: XConnection> Bar<'a, T> {
         // Redraw right widgets
         for i in self.widgets_right.iter_mut() {
 
-            if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
+            if global_redraw || i.needs_redraw || i.drawinfo.x + self.offset != i.last_x { 
 
                 let ds = DrawableSet::from(&i.current);
 
                 draw_widget(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
-                middle_redraw = true;
             }
-            i.last_x = i.drawinfo.x; 
+            i.last_x = i.drawinfo.x + self.offset; 
             i.needs_redraw = false;
         }
-        // Draw background between widget chunks, TODO: Smarter middle section redrawing
-        if middle_redraw {
+        // Draw background between widget chunks
+        if global_redraw  {
             self.default_bg.draw_bg(self.window, width_left, 0, (self.offset - width_left) as u16, height, height)?;
         }
+        else { 
+            if new_middle_left < self.middle_left {
+                let end = self.middle_left.min(new_middle_right);
+                self.middle_right = self.middle_right.max(end);
 
+                self.default_bg.draw_bg(self.window, new_middle_left, 0, (end - new_middle_left) as u16, height, height)?;
+            }
+            if new_middle_right > self.middle_right {
+                let begin = self.middle_right.max(new_middle_left);
+                self.default_bg.draw_bg(self.window, begin, 0, (new_middle_right - begin) as u16, height, height)?;
+            }
+        }
+
+        self.middle_left = new_middle_left;
+        self.middle_right = new_middle_right;
         self.window.flush()?;
 
         Ok(())
