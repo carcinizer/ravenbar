@@ -4,6 +4,7 @@ use crate::utils::find_human_readable;
 
 use std::error::Error;
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 use fontconfig;
 use freetype;
@@ -144,29 +145,34 @@ impl Font {
 
         let value = find_human_readable(fchars.iter().map(|x| x.0));
         let fg = ds.value_appearance(value);
+
         
         for (ch, fgc, bgc) in fchars.iter() {
             let glyph = self.glyph(*ch, height);
 
+
+            let x = x as isize;
+            let y = y as isize;
+            let gx = glyph.x as isize;
+            let gy = glyph.y as isize;
+            let cur = cursor as isize;
+            let w = width as isize;
+
+            let px = (x+gx+cur) as i16;
+            let py = (y+gy) as i16;
+
+            let fgimg = fg.unwrap_or(fgc).image(px, py, glyph.w, glyph.h, maxheight);
+            let bgimg = bgc.image(px, py, glyph.w, glyph.h, maxheight);
+
             for iy in 0..(glyph.h) {
                 for ix in 0..(glyph.w) {
-
-                    let x = x as usize;
-                    let y = y as usize;
-                    let ix = ix as usize;
-                    let iy = iy as usize;
-                    let gx = glyph.x as usize;
-                    let gy = glyph.y as usize;
-                    let cur = cursor as usize;
-                    let w = width as usize;
-
+                    let ix = ix as isize;
+                    let iy = iy as isize;
                     let bgindex = ((iy+gy)*w+ix+gx+cur) as usize;
 
-                    let px = (x+ix+gx+cur) as i16;
-                    let py = (y+iy+gy) as i16;
-                    
-                    let fgpix = fg.unwrap_or(fgc).pixel(px, py, maxheight);
-                    let bgpix = bgc.pixel(px, py, maxheight);
+                    let pos = (iy*(glyph.w as isize)+ix) as usize *4;
+                    let bgpix = Color::new(bgimg[pos+2], bgimg[pos+1], bgimg[pos],bgimg[pos+3]);
+                    let fgpix = Color::new(fgimg[pos+2], fgimg[pos+1], fgimg[pos],fgimg[pos+3]);
                     
                     let factor = glyph.pixel(ix as u16, iy as u16);
 
