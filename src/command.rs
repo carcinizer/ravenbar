@@ -9,13 +9,8 @@ use dyn_clone::DynClone;
 mod common;
 mod sysinfo;
 
-// Helper trait to support PartialEq for dynamic objects
-pub trait DynPartialEq: 'static + Any {
-    fn dyneq(&self, other: &dyn Any) -> bool;
-}
-
 // A general trait for commands, concrete implementations are in command/ directory
-pub trait CommandTrait: 'static + Any + DynClone + DynPartialEq {
+pub trait CommandTrait: 'static + Any + DynClone {
     fn execute(&self,  state: &mut CommandSharedState) -> String;
     fn updated(&self, _state: &mut CommandSharedState) -> bool {
         false
@@ -43,15 +38,6 @@ struct CommandObject {
     mountpoint: Option<String>
 }
 
-// Implement DynPartialEq for PartialEq so that we only need to use derive macro to support it
-impl<T: Any + 'static + PartialEq> DynPartialEq for T {
-    fn dyneq(&self, other: &dyn Any) -> bool {
-        match other.downcast_ref::<T>() {
-            Some(x) => self == x,
-            None => false
-        }
-    }
-}
 
 // This trait is only used when comparing "current" prop structs in order to redraw the widget.
 // Doing it "the right way" results in a lot of redundant redraws, heavily increasing CPU usage.

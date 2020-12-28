@@ -4,7 +4,6 @@ use crate::utils::find_human_readable;
 
 use std::error::Error;
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 use fontconfig;
 use freetype;
