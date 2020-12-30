@@ -37,7 +37,6 @@ pub struct BarConfigWidget {
 #[derive(Debug)]
 pub struct BarConfig {
     pub props: HashMap<(String, String), BarConfigProps>,
-    // pub widgets: Vec<BarConfigWidget>,
     pub widgets_left: Vec<BarConfigWidget>,
     pub widgets_right: Vec<BarConfigWidget>,
     pub default_bg: String,

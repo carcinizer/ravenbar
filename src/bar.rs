@@ -45,7 +45,7 @@ pub struct Bar<'a, T: XConnection> {
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
     font: Font,
-    cmdginfo: CommandSharedState
+    cmdstate: CommandSharedState
 }
 
 impl<'a, T: XConnection> Bar<'a, T> {
@@ -81,7 +81,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let mut bar = Self {props, widgets_left, widgets_right, window, font, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
-            cmdginfo: CommandSharedState::new(),
+            cmdstate: CommandSharedState::new(),
             default_bg: Drawable::from(cfg.default_bg),
             offset: 0,
             middle_left: 10000,
@@ -129,9 +129,9 @@ impl<'a, T: XConnection> Bar<'a, T> {
             // Update widget text
             if force || i.last_time_updated.elapsed().as_millis() > (props.interval * 1000.0) as u128
                      || i.last_event_updated != i.props.command.get_event(e,m) 
-                     || props.command.updated(&mut self.cmdginfo) {
+                     || props.command.updated(&mut self.cmdstate) {
                      
-                let new_cmd_out = props.command.execute(&mut self.cmdginfo);
+                let new_cmd_out = props.command.execute(&mut self.cmdstate);
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = i.props.command.get_event(e,m);
 
@@ -143,7 +143,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
             // Perform action
             if force || i.last_event_action != i.props.action.get_event(e,m) {
-                props.action.execute(&mut self.cmdginfo);
+                props.action.execute(&mut self.cmdstate);
             }
             
             // New draw info
