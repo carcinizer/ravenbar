@@ -8,6 +8,7 @@ use dyn_clone::DynClone;
 
 mod common;
 mod sysinfo;
+mod alsa;
 
 // A general trait for commands, concrete implementations are in command/ directory
 pub trait CommandTrait: 'static + Any + DynClone {
@@ -35,7 +36,9 @@ struct CommandObject {
     r#type: Option<String>,
     core: Option<usize>,
     network: Option<String>,
-    mountpoint: Option<String>
+    mountpoint: Option<String>,
+    card: Option<String>,
+    volume: Option<String>
 }
 
 
@@ -135,6 +138,19 @@ fn new_command(val: Value) -> Box<dyn CommandTrait> {
                             _ => panic!("Unknown command type {}", t)
                         };
                         Box::new(sysinfo::NetInfoCommand {ty,val,time, name: object.network})
+                    }
+                    Some(&"alsa") => {
+                        if let Some(&"volume") = words.get(2) {
+                            match words.get(1) {
+                                Some(&"get") => Box::new(alsa::ALSAGetVolumeCommand(object.card)),
+                                Some(&"set") => Box::new(alsa::ALSASetVolumeCommand(
+                                        object.card,
+                                        alsa::VolumeChange::new(object.volume.unwrap_or_default()))
+                                    ),
+                                _ => {panic!("Unknown command type {}", t)}
+                            }
+                        }
+                        else {panic!("Unknown command type {}", t)}
                     }
                     _ => panic!("Unknown command type {}", t)
                 }
