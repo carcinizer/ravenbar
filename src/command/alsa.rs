@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use alsa::mixer::{Mixer, Selem, SelemId, SelemChannelId};
 
-
 #[derive(Clone, PartialEq)]
 pub enum VolumeChange {
     Percent(isize,f32)
@@ -19,6 +18,7 @@ pub struct ALSASetVolumeCommand(pub Option<String>, pub VolumeChange);
 
 struct ALSASingleton {
     mixers: HashMap<String, Option<Mixer>>,
+    old_volume: Option<i64>
 }
 
 impl CommandTrait for ALSAGetVolumeCommand {
@@ -26,7 +26,7 @@ impl CommandTrait for ALSAGetVolumeCommand {
         state.get::<ALSASingleton>(0).get_volume_percent(&self.0)
     }
     fn updated(&self, state: &mut CommandSharedState) -> bool {
-        false // TODO update on volume change
+        state.get::<ALSASingleton>(0).has_volume_changed(&self.0)
     }
 }
 
@@ -68,7 +68,7 @@ impl VolumeChange {
 
 impl ALSASingleton {
     fn new() -> Self {
-        Self {mixers: HashMap::new()}
+        Self {mixers: HashMap::new(), old_volume: None}
     }
 
     fn with_selem<T,F>(&mut self, card: &Option<String>, f: F) -> Option<T> 
@@ -82,15 +82,21 @@ impl ALSASingleton {
             .and_then(|s| Some(f(s)))
     }
 
-    fn get_volume_percent(&mut self, card: &Option<String>) -> String {
+    fn get_volumes(&mut self, card: &Option<String>) -> Option<(i64,i64,i64)> {
 
         self.with_selem(card, |selem| {
             let (vmin, vmax) = selem.get_playback_volume_range();
-            if let Ok(v) = selem.get_playback_volume(SelemChannelId::FrontLeft) {
-                format!("{}%", ((v-vmin) as f32 / (vmax - vmin) as f32 * 100f32).round())
-            }
-            else {String::from("ERR")}
-        }).unwrap_or(String::from("ERR"))
+            selem.get_playback_volume(SelemChannelId::FrontLeft)
+                .ok().and_then(|v| Some((v,vmin,vmax)))
+        }).flatten()
+    }
+
+    fn get_volume_percent(&mut self, card: &Option<String>) -> String {
+        
+        self.get_volumes(card)
+        .and_then(|(v,vmin,vmax)| 
+            Some(format!("{}%", ((v-vmin) as f32 / (vmax - vmin) as f32 * 100f32).round()))
+        ).unwrap_or(String::from("ERR"))
     }
 
     fn set_volume_percent(&mut self, card: &Option<String>, vol: &VolumeChange) {
@@ -103,11 +109,19 @@ impl ALSASingleton {
                 let (vmin, vmax) = selem.get_playback_volume_range();
                 let v = selem.get_playback_volume(SelemChannelId::FrontLeft).unwrap_or(vmin);
 
-                let newvol = v * *rel as i64 + (*change * (vmax-vmin) as f32/100f32) as i64;
+                let newvol = (v * *rel as i64 + (*change * (vmax-vmin) as f32/100f32) as i64).max(vmin).min(vmax);
                 selem.set_playback_volume_all(newvol)
                     .err().and_then(|x| {eprintln!("Failed to set the new volume: {}", x); Some(())});
             }
         });
+    }
+
+    fn has_volume_changed(&mut self, card: &Option<String>) -> bool {
+        let new_volume = self.get_volumes(card).and_then(|(v,_,_)| Some(v));
+        let updated = new_volume != self.old_volume;
+
+        if updated {self.old_volume = new_volume;}
+        updated
     }
 }
 
