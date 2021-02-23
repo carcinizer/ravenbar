@@ -20,8 +20,6 @@ struct Widget {
     last_time_updated: Instant,
     last_event_updated: Event,
 
-    last_event_action: Event,
-
     last_x: i16,
     cmd_out: String,
     drawinfo: DrawFGInfo,
@@ -63,7 +61,6 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     width_min: 0, width_max:0,
                     last_time_updated: Instant::now(),
                     last_event_updated: Event::Default,
-                    last_event_action: Event::Default,
                     last_x: 0, 
                     cmd_out: String::new(),
                     drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
@@ -142,9 +139,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             }
 
             // Perform action
-            if force || i.last_event_action != i.props.action.get_event(e,m) {
-                props.action.execute(&mut self.cmdstate);
-            }
+            props.action.execute(&mut self.cmdstate);
             
             // New draw info
             i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &mut self.font, &i.cmd_out);

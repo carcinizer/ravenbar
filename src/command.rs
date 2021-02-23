@@ -1,6 +1,8 @@
 
 use std::collections::HashMap;
 use std::any::{Any, TypeId};
+use std::hash::{Hasher, Hash};
+use std::collections::hash_map::DefaultHasher;
 
 use serde_json::{Value, from_value};
 use serde::Deserialize;
@@ -27,7 +29,8 @@ pub struct CommandSharedState {
 // A command container used in other program structs
 #[derive(Clone)]
 pub struct Command {
-    cmd: Box<dyn CommandTrait>
+    cmd: Box<dyn CommandTrait>,
+    id: u64
 }
 
 // Wrapper for JSON object
@@ -45,8 +48,8 @@ struct CommandObject {
 // This trait is only used when comparing "current" prop structs in order to redraw the widget.
 // Doing it "the right way" results in a lot of redundant redraws, heavily increasing CPU usage.
 impl PartialEq for Command {
-    fn eq(&self, _other: &Self) -> bool {
-        true
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 
@@ -69,7 +72,11 @@ impl CommandSharedState {
 
 impl From<Value> for Command {
     fn from(val: Value) -> Self {
-        Self { cmd: new_command(val) }
+        // Coming up with a better implementation is left as an exercise for the reader
+        
+        let mut hasher = DefaultHasher::new();
+        format!("{:?}", val).hash(&mut hasher);
+        Self { cmd: new_command(val), id: hasher.finish() }
     }
 }
 
@@ -86,8 +93,9 @@ fn new_command(val: Value) -> Box<dyn CommandTrait> {
                 None => Box::new(common::NoneCommand)
             }
         }
+        // Note - child commands can have id 0, because they will never be compared
         Value::Array(v) => Box::new(common::MultiCommand(v.iter()
-                        .map(|s| Command {cmd: new_command(s.to_owned())})
+                        .map(|s| Command::from(s.to_owned()))
                         .collect())),
         Value::Object(obj) => {
             let object: CommandObject = from_value(Value::Object(obj)).unwrap();
