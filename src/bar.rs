@@ -2,7 +2,7 @@
 use crate::props::*;
 use crate::window::*;
 use crate::event::Event;
-use crate::font::Font;
+use crate::font::Renderer;
 use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo, draw_widget};
@@ -42,7 +42,7 @@ pub struct Bar<'a, T: XConnection> {
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
-    font: Font,
+    font: Renderer,
     cmdstate: CommandSharedState
 }
 
@@ -72,7 +72,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
-        let font = Font::new(&cfg.font[..], &window.fontutils)?;
+        let font = Renderer::new(cfg.fonts, &window.fontutils);
         let current = props.as_current(&vec![Event::Default], false);
 
         let mut bar = Self {props, widgets_left, widgets_right, window, font, 

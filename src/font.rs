@@ -16,10 +16,23 @@ pub struct FontUtils {
     lib: freetype::Library
 }
 
-pub struct Font {
-    face: freetype::Face,
-    baseline: HashMap<u16, u16>,
-    glyphs: HashMap<(char, u16), Glyph>
+/// An object representing character, and, in the future, images etc.
+#[derive(Eq, PartialEq, Hash, Clone)]
+pub enum CharObj {
+    Char(char)
+}
+
+struct Font {
+    faces: Vec<freetype::Face>,
+    baselines: Vec<HashMap<u16,u16>>,
+    glyphs: HashMap<(CharObj, u16), Glyph>,
+
+    // Dealing with glyphs array directly for checking existence is quite problematic
+    glyph_existence: HashMap<(CharObj, u16), ()>
+}
+
+pub struct Renderer {
+    fonts: HashMap<String, Font>
 }
 
 pub struct Glyph {
@@ -32,98 +45,104 @@ pub struct Glyph {
     advx: u16,
 }
 
-#[derive(Debug)]
-enum FontError {
-    NonScalable(String)
-}
-impl Error for FontError {}
-impl std::fmt::Display for FontError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::NonScalable(s) => write!(f, "Font {} is not scalable", s)
-        }
-    }
-}
 
-
-/// TODO subpixel handling
 impl Font {
-    pub fn new(name: &str, fu: &FontUtils) -> Result<Self, Box<dyn Error>> {
-        let fontpath = fu.fc.find(name, None).unwrap().path;
-
-        let face = fu.lib.new_face(fontpath,0)?;
-
-        if !face.is_scalable() {
-            return Err(Box::new(FontError::NonScalable(name.to_string())));
-        }
-
-        Ok( Self {face, glyphs: HashMap::new(), baseline: HashMap::new()} )
+    fn find_glyph(&self, ch: char, height: u16) -> (usize, u32) {
+        self.faces.iter().enumerate().fold(None, |acc,(cid, face)| {
+            if let Some(_) = acc {
+                acc
+            }
+            else {
+                face.set_pixel_sizes(0, height as _).unwrap();
+                let g = face.get_char_index(ch as usize);
+                if g != 0 {
+                    Some((cid, g))
+                }
+                else {None}
+            }
+        }).unwrap_or((0,0))
     }
 
-    /// Get distance from top to baseline, or calculate it based on common characters
-    fn baseline(&mut self, height: u16) -> u16 {
-        let calcdesc = match self.baseline.get(&height) {
-            Some(_) => None,
-            None => Some({
-
-                self.face.set_pixel_sizes(0, height as _).unwrap();
-
-                "gjpqy".chars().map( |ch| {
-                    self.face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
-                    
-                    let ftglyph = self.face.glyph();
-                    ftglyph.bitmap().rows() - ftglyph.bitmap_top()
-
-                }).fold(0, |acc, x| acc.max(x)) as u16
-            })
-        };
+    fn glyph(&mut self, chobj: CharObj, height: u16) -> &Glyph {
         
-        let descend = match calcdesc {
-            Some(x) => *self.baseline.entry(height).or_insert(x),
-            None => *self.baseline.get(&height).unwrap()
-        };
+        let mut exists = true;
+        self.glyph_existence.entry((chobj.clone(), height)).or_insert_with(|| {exists = false; ()});
 
-        height - descend
+        if exists {
+            self.glyphs.get(&(chobj, height)).unwrap()
+        } 
+        else {
+            let x = match chobj {
+                CharObj::Char(ch) => {
+                    
+                    let (id, glyph) = self.find_glyph(ch, height);
+                    let face = self.faces.get(id).unwrap();
+
+                    let descend = self.baselines.get_mut(id).unwrap().entry(height).or_insert_with(|| {
+                        face.set_pixel_sizes(0, height as _).unwrap();
+
+                        "gjpqy".chars().map( |ch| {
+                            face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
+                            
+                            let ftglyph = face.glyph();
+                            ftglyph.bitmap().rows() - ftglyph.bitmap_top()
+
+                        }).fold(0, |acc, x| acc.max(x)) as u16
+                    });
+
+                    let baseline = height - *descend;
+
+                    face.load_glyph(glyph, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
+                    let ftglyph = face.glyph();
+
+                    Glyph {
+                        bitmap: Vec::from(ftglyph.bitmap().buffer()),
+                        x: ftglyph.bitmap_left() as i16,
+                        y: baseline as i16 - (ftglyph.bitmap_top()) as i16,
+                        advx: (ftglyph.advance().x / 64) as u16,
+                        w: ftglyph.bitmap().width() as u16 / 3,
+                        h: ftglyph.bitmap().rows() as u16,
+                        pitch: ftglyph.bitmap().pitch() as u16,
+                    }
+
+                }
+            };
+            self.glyphs.entry((chobj, height)).or_insert(x)
+        }
     }
+}
+
+impl Renderer {
+    pub fn new(fonts: HashMap<String, Vec<String>>, fu: &FontUtils) -> Renderer {
+
+        Self { fonts: fonts.iter().map(|(k,v)| {
+            let faces = v.iter()
+                .filter_map(|name| 
+                    fu.fc.find(name, None)
+                        .and_then(|x| fu.lib.new_face(x.path,0).ok())
+                ).collect::<Vec<_>>();
+
+            faces.iter().find(|x| {
+                if !x.is_scalable() {
+                    panic!("Font {} {} is not scalable", x.family_name().unwrap_or(String::new()), x.style_name().unwrap_or(String::new()))
+                } else {false}
+            });
+
+            let baselines = vec!(HashMap::new(); faces.len());
+            
+            (k.clone(), Font {faces, baselines, glyphs: HashMap::new(), glyph_existence: HashMap::new()})
+        }).collect()}
+    }
+
 
     /// Get a glyph for specified character, create one if unavailable
-    pub fn glyph(&mut self, ch: char, height: u16) -> &Glyph {
-
-        let baseline = self.baseline(height);
-
-        let newglyph = match self.glyphs.get(&(ch, height)) {
-            Some(_) => None,
-            None => {
-
-                self.face.set_pixel_sizes(0, height as _).unwrap();
-                self.face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
-
-                let ftglyph = self.face.glyph();
-
-                Some(Glyph {
-                    bitmap: Vec::from(ftglyph.bitmap().buffer()),
-                    x: ftglyph.bitmap_left() as i16,
-                    y: baseline as i16 - (ftglyph.bitmap_top()) as i16,
-                    advx: (ftglyph.advance().x / 64) as u16,
-                    w: ftglyph.bitmap().width() as u16 / 3,
-                    h: ftglyph.bitmap().rows() as u16,
-                    pitch: ftglyph.bitmap().pitch() as u16,
-                })
-            }
-        };
-        
-        match newglyph {
-            Some(x) => {self.glyphs.entry((ch,height)).or_insert(x)},
-            None => self.glyphs.get(&(ch, height)).unwrap()
-        }
-
+    pub fn glyph(&mut self, ch: CharObj, font: &String, height: u16) -> &Glyph {
+        self.fonts.get_mut(font).unwrap().glyph(ch, height)
     }
 
-    pub fn width(&mut self, text: &String, height: u16) -> u16 {
-        let text_nfc = text.nfc().formatted(None).map(|x| x.0).collect::<String>();
-        
-        text_nfc.chars().fold(0, |acc, ch| {
-            acc + (self.glyph(ch, height).advx) as u16
+    pub fn width(&mut self, text: &String, font: &String, height: u16) -> u16 {
+        text.nfc().formatted(None).fold(0, |acc, (ch, _, _)| {
+            acc + (self.glyph(ch, font, height).advx) as u16
         })
     }
 
@@ -134,6 +153,7 @@ impl Font {
         height: u16,
         maxheight: u16,
         text: &String,
+        font: &String,
         ds: &DrawableSet
         ) -> Result<Vec<u8>, Box<dyn Error>> 
     {
@@ -142,12 +162,14 @@ impl Font {
         let fchars = text.nfc().formatted(Some(ds)).collect::<Vec<_>>();
         let mut cursor = 0;
 
-        let value = find_human_readable(fchars.iter().map(|x| x.0));
+        let value = find_human_readable(fchars.iter().filter_map(|x| 
+            if let CharObj::Char(c) = x.0 {Some(c)} else {None}
+        ));
         let fg = ds.value_appearance(value);
 
         
         for (ch, fgc, bgc) in fchars.iter() {
-            let glyph = self.glyph(*ch, height);
+            let glyph = self.glyph(ch.clone(), font, height);
 
 
             let x = x as isize;
@@ -168,6 +190,9 @@ impl Font {
                     let ix = ix as isize;
                     let iy = iy as isize;
                     let bgindex = ((iy+gy)*w+ix+gx+cur) as usize;
+                    if bgindex > 0xffffffff {
+                        continue;
+                    }
 
                     let pos = (iy*(glyph.w as isize)+ix) as usize *4;
                     let bgpix = Color::new(bgimg[pos+2], bgimg[pos+1], bgimg[pos],bgimg[pos+3]);
@@ -201,7 +226,7 @@ pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
 impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T> 
     where T: std::iter::Iterator<Item = char>
 {
-    type Item = (char, Drawable, Drawable);
+    type Item = (CharObj, Drawable, Drawable);
 
     fn next(&mut self) -> Option<Self::Item> {
             
@@ -231,7 +256,7 @@ impl<'a, T> std::iter::Iterator for FormattedTextIter<'a, T>
                     }
                 }
                 else if !first.is_control() {
-                    return Some((first, self.fg.clone(), self.bg.clone()));
+                    return Some((CharObj::Char(first), self.fg.clone(), self.bg.clone()));
                 }
             }
             else {

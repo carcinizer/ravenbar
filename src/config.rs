@@ -41,7 +41,7 @@ pub struct BarConfig {
     pub widgets_right: Vec<BarConfigWidget>,
     pub default_bg: String,
 
-    pub font: String
+    pub fonts: HashMap<String, Vec<String>>
 }
 
 
@@ -53,9 +53,11 @@ impl BarConfig {
         let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
         let mut widget_left_arr = Vec::<Value>::new();
         let mut widget_right_arr = Vec::<Value>::new();
-        let mut font = String::from("Monospace");
+        let mut fonts = HashMap::<String, Vec<String>>::new();
         let mut templates = HashMap::<String, BarConfigWidget>::new();
         
+        // Insert the default font
+        fonts.insert("default".to_string(), vec!("Monospace".to_string()));
         // Insert the 'default' template
         templates.insert("".to_string(), BarConfigWidget::new());
 
@@ -91,13 +93,22 @@ impl BarConfig {
                         else {panic!("'widgets' value must be an array")}
                     }
                     "font" => {
-                        if event != "default".to_owned() {
-                            panic!("Events for fonts are currently not supported (event name: {})", event);
-                        }
                         if let Value::String(s) = val {
-                            font = s.clone();
+                            fonts.insert(event.clone(), vec!(s.clone()));
                         }
-                        else {panic!("'font' must be a string")}
+                        else if let Value::Array(a) = val {
+                            let mut names = Vec::with_capacity(a.len());
+                            
+                            for i in a.iter() {
+                                if let Value::String(x) = i {
+                                    names.push(x.clone());
+                                }
+                                else {panic!("'font' must be either a string or an array of strings")}
+                            }
+                            
+                            fonts.insert(event.clone(), names);
+                        }
+                        else {panic!("'font' must be either a string or an array of strings")}
                     }
                     _ => {
                         bar_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
@@ -154,7 +165,7 @@ impl BarConfig {
             None => "#222233".to_string()
         };
 
-        Ok(BarConfig {props, widgets_left, widgets_right, font, default_bg})
+        Ok(BarConfig {props, widgets_left, widgets_right, fonts, default_bg})
     }
 
     pub fn get_files_to_watch(&self) -> HashMap<PathBuf, std::time::SystemTime> {
