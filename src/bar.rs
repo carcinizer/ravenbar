@@ -42,7 +42,7 @@ pub struct Bar<'a, T: XConnection> {
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: &'a Window<'a, T>,
-    font: Renderer,
+    renderer: Renderer,
     cmdstate: CommandSharedState
 }
 
@@ -63,7 +63,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     last_event_updated: Event::Default,
                     last_x: 0, 
                     cmd_out: String::new(),
-                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0},
+                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0,font:String::new()},
                     current,
                     mouse_over: false,
                     needs_redraw: false
@@ -72,10 +72,10 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
-        let font = Renderer::new(cfg.fonts, &window.fontutils);
+        let renderer = Renderer::new(cfg.fonts, &window.fontutils);
         let current = props.as_current(&vec![Event::Default], false);
 
-        let mut bar = Self {props, widgets_left, widgets_right, window, font, 
+        let mut bar = Self {props, widgets_left, widgets_right, window, renderer, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdstate: CommandSharedState::new(),
@@ -142,7 +142,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             props.action.execute(&mut self.cmdstate);
             
             // New draw info
-            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &mut self.font, &i.cmd_out);
+            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &mut self.renderer, &props.font, &i.cmd_out);
 
             // New widget width
             let width = i.drawinfo.width;
@@ -222,7 +222,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 
                 let ds = DrawableSet::from(&i.current);
 
-                draw_widget(self.window, &i.drawinfo, 0, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
+                draw_widget(self.window, &i.drawinfo, 0, i.width_max, &mut self.renderer, &ds, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -234,7 +234,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
                 let ds = DrawableSet::from(&i.current);
 
-                draw_widget(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.font, &ds, &i.cmd_out)?;
+                draw_widget(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.renderer, &ds, &i.cmd_out)?;
             }
             i.last_x = i.drawinfo.x + self.offset; 
             i.needs_redraw = false;

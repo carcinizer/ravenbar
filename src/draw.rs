@@ -29,6 +29,7 @@ pub struct DrawFGInfo {
     pub height: u16,
     pub fgy: i16,
     pub fgheight: u16,
+    pub font: String
 }
 
 pub struct DrawableSet {
@@ -60,14 +61,14 @@ pub struct DrawableSet {
 
 impl DrawFGInfo {
     
-    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, font: &mut Renderer, text: &String) -> DrawFGInfo {
+    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, renderer: &mut Renderer, font: &String, text: &String) -> DrawFGInfo {
        
         let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height - fgheight) / 2) as i16;
         
-        let width = font.width(text, &String::from("default"), fgheight);
+        let width = renderer.width(text, font, fgheight);
         
-        DrawFGInfo {x,y,width,height, fgy,fgheight}
+        DrawFGInfo {x,y,width,height, fgy,fgheight, font: font.clone()}
     }
 }
 
@@ -195,7 +196,7 @@ pub fn draw_widget<T: XConnection>(
     info: &DrawFGInfo, 
     offset: i16,
     width_max: u16, 
-    font: &mut Renderer, 
+    renderer: &mut Renderer, 
     ds: &DrawableSet, 
     text: &String) -> Result<(),Box<dyn Error>> 
 {
@@ -203,7 +204,7 @@ pub fn draw_widget<T: XConnection>(
 
     // Text
     let fgx = i.x + (width_max - i.width) as i16 / 2;
-    let bg = font.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &String::from("default"), &ds)?;
+    let bg = renderer.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &i.font, &ds)?;
     draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
 
     // Top and bottom borders
