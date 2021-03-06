@@ -1,5 +1,5 @@
 
-use crate::draw::{Color, Drawable, DrawableSet};
+use crate::draw::{Color, Drawable, DrawableSet, scale};
 use crate::utils::find_human_readable;
 
 use std::error::Error;
@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use fontconfig;
 use freetype;
 use freetype::face::LoadFlag;
+use freetype_sys::FT_Select_Size;
 use unicode_normalization::UnicodeNormalization;
 
 
@@ -53,7 +54,6 @@ impl Font {
                 acc
             }
             else {
-                face.set_pixel_sizes(0, height as _).unwrap();
                 let g = face.get_char_index(ch as usize);
                 if g != 0 {
                     Some((cid, g))
@@ -76,13 +76,26 @@ impl Font {
                 CharObj::Char(ch) => {
                     
                     let (id, glyph) = self.find_glyph(ch, height);
-                    let face = self.faces.get(id).unwrap();
+                    let face = self.faces.get_mut(id).unwrap();
+
+                    if face.is_scalable() {
+                        face.set_pixel_sizes(0, height as _).unwrap();
+                    }
+                    else {
+                        unsafe {
+                            let f = face.raw_mut();
+                            let i = (0..f.num_fixed_sizes).min_by_key(|x| 
+                                ((*f.available_sizes.offset(*x as isize)).height - height as i16).abs()
+                            ).unwrap_or(0);
+
+                            FT_Select_Size(f, i);
+                        }
+                    }
 
                     let descend = self.baselines.get_mut(id).unwrap().entry(height).or_insert_with(|| {
-                        face.set_pixel_sizes(0, height as _).unwrap();
 
                         "gjpqy".chars().map( |ch| {
-                            face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
+                            face.load_char(ch as _, LoadFlag::RENDER | LoadFlag::TARGET_LCD | LoadFlag::COLOR).unwrap();
                             
                             let ftglyph = face.glyph();
                             ftglyph.bitmap().rows() - ftglyph.bitmap_top()
@@ -92,19 +105,59 @@ impl Font {
 
                     let baseline = height - *descend;
 
-                    face.load_glyph(glyph, LoadFlag::RENDER | LoadFlag::TARGET_LCD).unwrap();
+                    face.load_glyph(glyph, LoadFlag::RENDER | LoadFlag::TARGET_LCD | LoadFlag::COLOR).unwrap();
                     let ftglyph = face.glyph();
 
-                    Glyph {
-                        bitmap: Vec::from(ftglyph.bitmap().buffer()),
-                        x: ftglyph.bitmap_left() as i16,
-                        y: baseline as i16 - (ftglyph.bitmap_top()) as i16,
-                        advx: (ftglyph.advance().x / 64) as u16,
-                        w: ftglyph.bitmap().width() as u16 / 3,
-                        h: ftglyph.bitmap().rows() as u16,
-                        pitch: ftglyph.bitmap().pitch() as u16,
-                    }
+                    if face.is_scalable() {
+                        // Vector font
+                        
+                        let bm = ftglyph.bitmap();
+                        let buf = bm.buffer();
+                        let mut bitmap = Vec::with_capacity(buf.len()*4/3);
 
+                        for i in 0..(bm.pitch() * bm.rows() / 3) {
+                            let i = i as usize;
+                            let (r,g,b) = (buf[3*i], buf[3*i+1], buf[3*i+2]);
+                            bitmap.extend(&[r,g,b,((r as u16 + g as u16 + b as u16)/3u16) as u8]);
+                        }
+
+                        let x = Glyph {
+                            bitmap,
+                            x: ftglyph.bitmap_left() as i16,
+                            y: baseline as i16 - (ftglyph.bitmap_top()) as i16,
+                            advx: (ftglyph.advance().x / 64) as u16,
+                            w: ftglyph.bitmap().width() as u16 / 3,
+                            h: ftglyph.bitmap().rows() as u16,
+                            pitch: ftglyph.bitmap().pitch() as u16 /3 * 4,
+                        };
+                        //dbg!(x.x,x.y,x.advx,x.w,x.h,x.pitch);
+                        x
+                    }
+                    else {
+                        // Bitmap font/Emoji
+
+                        let w =  height as i32 * ftglyph.bitmap().width() / ftglyph.bitmap().rows();
+                        let bitmap = scale(
+                            &Vec::from(ftglyph.bitmap().buffer()), ftglyph.bitmap().pitch() as usize,
+                            ftglyph.bitmap().width() as usize, ftglyph.bitmap().rows() as usize,
+                            w as usize, height as usize
+                        );
+                        
+                        bitmap.iter().filter(|x| **x != 0).for_each(|x| eprint!("{}\t",x));
+                        if let Ok(freetype::bitmap::PixelMode::Bgra) = ftglyph.bitmap().pixel_mode() {
+                            eprint!("xd");
+                        }
+                        //dbg!(w,height, ftglyph.bitmap().width(), ftglyph.bitmap().rows());
+                        Glyph {
+                            bitmap,
+                            x: 5,
+                            y: 0 as i16,
+                            advx: w as u16 * 3,
+                            w: w as u16,
+                            h: height,
+                            pitch: w as u16
+                        }
+                    }
                 }
             };
             self.glyphs.entry((chobj, height)).or_insert(x)
@@ -121,12 +174,6 @@ impl Renderer {
                     fu.fc.find(name, None)
                         .and_then(|x| fu.lib.new_face(x.path,0).ok())
                 ).collect::<Vec<_>>();
-
-            faces.iter().find(|x| {
-                if !x.is_scalable() {
-                    panic!("Font {} {} is not scalable", x.family_name().unwrap_or(String::new()), x.style_name().unwrap_or(String::new()))
-                } else {false}
-            });
 
             let baselines = vec!(HashMap::new(); faces.len());
             
@@ -284,10 +331,10 @@ impl<T> Formatted<T> for T
 
 impl Glyph {
     fn pixel(&self, x: u16, y: u16) -> Color {
-        let pos = (y*self.pitch+x*3) as usize;
-        let rgb = self.bitmap.get(pos..(pos+3)).unwrap();
-        let avg = (rgb[0] as u16 + rgb[1] as u16 + rgb[2] as u16 / 3 as u16) as u8;
-        Color::new(rgb[0], rgb[1], rgb[2], avg)
+        let pos = (y*self.pitch+x*4) as usize;
+        let rgb = self.bitmap.get(pos..(pos+4)).unwrap_or(&[0,0,0,0]);
+        //let avg = (rgb[0] as u16 + rgb[1] as u16 + rgb[2] as u16 / 3 as u16) as u8;
+        Color::new(rgb[0], rgb[1], rgb[2], rgb[3])
     }
 }
 

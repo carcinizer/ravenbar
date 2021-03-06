@@ -338,3 +338,35 @@ impl DrawableSet {
         }
     }
 }
+
+
+fn rescale_coord(x: usize, old: usize, new: usize) -> (usize, f32, f32) {
+    let o = (x as f32) * (old as f32) / (new as f32);
+    (o.floor() as usize, o.fract(), 1.0 - o.fract())
+}
+
+
+pub fn scale(original: &Vec<u8>, pitch: usize, oldw: usize, oldh: usize, neww: usize, newh: usize) -> Vec<u8> {
+    let bpp = original.len() / pitch / oldh;
+    let mut v = Vec::with_capacity(neww * newh * bpp);
+
+    let idx = |x,y| pitch*y+x;
+    let o = |(w,i),b| ((*original.get(i*bpp+b).unwrap_or(&0) as f32) * w) as u8;
+
+    for y in 0..newh {
+        let (yo, yl1, yl2) = rescale_coord(y, oldh, newh);
+
+        for x in 0..neww {
+            let (xo, xl1, xl2) = rescale_coord(x, oldw, neww);
+
+            let weights = [(xl1*yl1, idx(xo+0, yo+0)), 
+                           (xl2*yl1, idx(xo+1, yo+0)),
+                           (xl1*yl2, idx(xo+0, yo+1)),
+                           (xl2*yl2, idx(xo+1, yo+1))];
+            for b in 0..bpp {
+                v.push(weights.iter().map(|x| o(*x,b)).sum());
+            }
+        }  
+    }
+    v
+}
