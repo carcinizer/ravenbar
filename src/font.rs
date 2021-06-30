@@ -5,17 +5,10 @@ use crate::utils::find_human_readable;
 use std::error::Error;
 use std::collections::HashMap;
 
-use fontconfig;
-use freetype;
-use freetype::face::LoadFlag;
-use freetype_sys::FT_Select_Size;
+use cairo::XCBSurface;
+
 use unicode_normalization::UnicodeNormalization;
 
-
-pub struct FontUtils {
-    fc: fontconfig::Fontconfig,
-    lib: freetype::Library
-}
 
 /// An object representing character, and, in the future, images etc.
 #[derive(Eq, PartialEq, Hash, Clone)]
@@ -23,18 +16,19 @@ pub enum CharObj {
     Char(char)
 }
 
-struct Font {
+/*struct Font {
     faces: Vec<freetype::Face>,
     baselines: Vec<HashMap<u16,u16>>,
     glyphs: HashMap<(CharObj, u16), Glyph>,
 
     // Dealing with glyphs array directly for checking existence is quite problematic
     glyph_existence: HashMap<(CharObj, u16), ()>
-}
+}*/
 
-pub struct Renderer {
-    fonts: HashMap<String, Font>
-}
+/*pub struct Renderer {
+    surface: XCBSurface
+    //fonts: HashMap<String, Font>
+}*/
 
 pub struct Glyph {
     bitmap: Vec<u8>,
@@ -46,8 +40,7 @@ pub struct Glyph {
     advx: u16,
 }
 
-
-impl Font {
+/*impl Font {
     fn find_glyph(&self, ch: char, height: u16) -> (usize, u32) {
         self.faces.iter().enumerate().fold(None, |acc,(cid, face)| {
             if let Some(_) = acc {
@@ -163,12 +156,13 @@ impl Font {
             self.glyphs.entry((chobj, height)).or_insert(x)
         }
     }
-}
+}*/
 
-impl Renderer {
-    pub fn new(fonts: HashMap<String, Vec<String>>, fu: &FontUtils) -> Renderer {
+/*impl Renderer {
+    //pub fn new(fonts: HashMap<String, Vec<String>>, fu: &FontUtils) -> Renderer {
+    //pub fn new() -> Renderer {
 
-        Self { fonts: fonts.iter().map(|(k,v)| {
+        /*Self { fonts: fonts.iter().map(|(k,v)| {
             let faces = v.iter()
                 .filter_map(|name| 
                     fu.fc.find(name, None)
@@ -178,22 +172,22 @@ impl Renderer {
             let baselines = vec!(HashMap::new(); faces.len());
             
             (k.clone(), Font {faces, baselines, glyphs: HashMap::new(), glyph_existence: HashMap::new()})
-        }).collect()}
-    }
+        }).collect()}*/
+    //}
 
 
-    /// Get a glyph for specified character, create one if unavailable
-    pub fn glyph(&mut self, ch: CharObj, font: &String, height: u16) -> &Glyph {
+    // / Get a glyph for specified character, create one if unavailable
+    /*pub fn glyph(&mut self, ch: CharObj, font: &String, height: u16) -> &Glyph {
         self.fonts.get_mut(font).unwrap().glyph(ch, height)
     }
-
-    pub fn width(&mut self, text: &String, font: &String, height: u16) -> u16 {
+    */
+    /*pub fn width(&mut self, text: &String, font: &String, height: u16) -> u16 {
         text.nfc().formatted(None).fold(0, |acc, (ch, _, _)| {
             acc + (self.glyph(ch, font, height).advx) as u16
         })
-    }
+    }*/
 
-    pub fn draw_text(&mut self, 
+    /*pub fn draw_text(&mut self, 
         x: u16,
         y: u16,
         width: u16,
@@ -204,7 +198,7 @@ impl Renderer {
         ds: &DrawableSet
         ) -> Result<Vec<u8>, Box<dyn Error>> 
     {
-        let mut v = ds.background.image(x as i16,y as i16,width,height,maxheight);
+        /*let mut v = ds.background.image(x as i16,y as i16,width,height,maxheight);
 
         let fchars = text.nfc().formatted(Some(ds)).collect::<Vec<_>>();
         let mut cursor = 0;
@@ -258,10 +252,10 @@ impl Renderer {
             cursor += glyph.advx;
         }
         
-        Ok(v)
-    }
+        Ok(v)*/
+    }*/
     
-}
+}*/
 
 pub struct FormattedTextIter<'a, T: std::iter::Iterator<Item = char>> {
     chars: &'a mut T,
@@ -338,7 +332,7 @@ impl Glyph {
     }
 }
 
-impl FontUtils {
+/*impl FontUtils {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             fc: match fontconfig::Fontconfig::new() {
@@ -348,4 +342,4 @@ impl FontUtils {
             lib: freetype::Library::init()?
         })
     }
-}
+}*/

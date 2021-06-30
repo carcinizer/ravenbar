@@ -14,7 +14,6 @@ use event::Event;
 
 use std::error::Error;
 
-use x11rb::connection::Connection;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -51,29 +50,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     else {
-        let (conn, screen_num) = x11rb::connect(None)?;
-        
-        let wnd = window::Window::new(&conn, screen_num)?;
+        //let (conn, screen_num) = x11rb::connect(None)?;
         
         let config = config::BarConfig::new(file)?;
         let mut files_last_changed = config.get_files_to_watch();
 
-        let mut b = bar::Bar::create(config, &wnd)?;
+        let mut b = bar::Bar::create(config);
 
         loop {
-            let (x,y) = wnd.get_pointer()?;
-            let ev_opt = conn.poll_for_event()?;
-            
-            let mut evec : Vec<Event> = vec![];
-            
-            if let Some(e1) = ev_opt {
-                evec.extend(Event::events_from(e1));
+            let (mut evec, x, y) = b.get_current_events();
 
-                while let Some(e) = conn.poll_for_event()? {
-                    evec.extend(Event::events_from(e));
-                }
-            }
-
+            // Monitor files, TODO migrate to inotify
             for (file, time) in files_last_changed.iter_mut() {
                 let newtime = std::fs::metadata(file).expect("File not found")
                     .modified().expect("Could not get file modification time");
@@ -93,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             
             std::thread::sleep(std::time::Duration::from_millis(16));
 
-            conn.flush()?;
+            b.flush();
         }
     }
 }

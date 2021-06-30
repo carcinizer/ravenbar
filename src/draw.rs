@@ -1,12 +1,13 @@
 
-use crate::window::{Window, XConnection};
-use crate::font::Renderer;
+use crate::window::Window;
 use crate::utils::mix_comp;
 use crate::props::WidgetPropsCurrent;
+use crate::utils::find_human_readable;
+use crate::font::{CharObj, Formatted as _};
 
-use std::error::Error;
+use cairo::{TextExtents, Pattern, Operator};
+use unicode_normalization::UnicodeNormalization;
 
-use x11rb::protocol::xproto::*;
 
 #[derive(Copy, Clone, PartialEq)]
 pub struct Color {
@@ -22,6 +23,7 @@ pub enum Drawable {
     VGradient(Vec<Color>)
 }
 
+#[derive(Debug)]
 pub struct DrawFGInfo {
     pub x: i16,
     pub y: i16,
@@ -29,6 +31,8 @@ pub struct DrawFGInfo {
     pub height: u16,
     pub fgy: i16,
     pub fgheight: u16,
+    pub xb: f64,
+    pub yb: f64,
     pub font: String
 }
 
@@ -61,14 +65,18 @@ pub struct DrawableSet {
 
 impl DrawFGInfo {
     
-    pub fn new(x: i16, y: i16, height: u16, border_factor: f32, renderer: &mut Renderer, font: &String, text: &String) -> DrawFGInfo {
-       
+    pub fn new(window: &Window, x: i16, y: i16, height: u16, border_factor: f32, font: &String, text: &String) -> DrawFGInfo {
+        
         let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height - fgheight) / 2) as i16;
         
-        let width = renderer.width(text, font, fgheight);
+        //let width = 10;//renderer.width(text, font, fgheight);
+        // TODO another way of processing it (command vectors?)
+        let fchars = text.nfc().formatted(None).map(|(ch,_,_)| if let CharObj::Char(c) = ch {c} else {'?'}).collect::<String>();
+        let (xb, yb, width, _) = window.get_text_extents(&fchars, font, fgheight as f64);
         
-        DrawFGInfo {x,y,width,height, fgy,fgheight, font: font.clone()}
+        // width + 1  - more or less prevent from clipping text
+        DrawFGInfo {x,y,width: width as u16 + 1,height, fgy,fgheight, xb,yb, font: font.clone()}
     }
 }
 
@@ -129,6 +137,7 @@ impl Drawable {
         }
     }
 
+    /*
     pub fn pixel(&self, _x: i16, y: i16, maxheight: u16) -> Color {
         match self {
             Self::Color(c) => *c,
@@ -153,11 +162,52 @@ impl Drawable {
 
         v
     }
+*/
 
-    pub fn draw_bg<T: XConnection>(&self, window: &Window<T>, x: i16, y: i16, width: u16, height: u16, maxheight: u16)
-        -> Result<(), Box<dyn Error>> 
-    {
+
+    pub fn draw(&self, window: &Window, mask: Option<CharObj>, x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> f64 {
+        
+        //let string = string;//CharObj::vec_from(string)
+        let c = &window.ctx;
+
+        let norm = |x| (x as f64) / 255.0;
+
         match self {
+            Self::Color(col) => c.set_source_rgba(norm(col.r), norm(col.g), norm(col.b), norm(col.a)),
+            Self::VGradient(v) => {
+                let src = cairo::LinearGradient::new(0.0, 0.0 as f64, 0.0, maxheight as f64);
+                for (c,i) in v.iter().enumerate() {
+                    src.add_color_stop_rgba(c as f64 / (v.len()-1) as f64, norm(i.r),norm(i.g),norm(i.b), norm(i.a));
+                }
+                c.set_source(&src);
+            }
+        };
+        
+        let extents = match mask {
+            Some(CharObj::Char(ch)) => {
+                
+                let text = &ch.to_string();
+                c.set_operator(Operator::Over);
+                
+                c.move_to(x as f64, y as f64);
+                c.show_text(text);
+
+                //dbg!(ch,x,y,width,height,maxheight);
+                c.text_extents(text).x_advance
+            }
+            None => {
+                c.set_operator(Operator::Source);
+                c.move_to(x as f64, y as f64);
+                c.rectangle(x as f64, y as f64, width as f64, height as f64);
+                c.fill();
+
+                width as f64
+            }
+        };
+
+        extents
+        
+        /*match self {
             Drawable::Color(c) => {
                 let gc = window.conn.generate_id()?;
 
@@ -173,13 +223,13 @@ impl Drawable {
             _ => draw_image(window, x, y, width, height, 
                             &self.image(x, y, width, height, maxheight))?
         }
-        Ok(())
+        Ok(())*/
     }
 }
 
 
 // TODO put somewhere else
-fn draw_image<T: XConnection>(window: &Window<T>, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
+/*fn draw_image(window: &Window, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
     
     let gc = window.conn.generate_id()?;
     window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
@@ -189,34 +239,8 @@ fn draw_image<T: XConnection>(window: &Window<T>, x: i16, y: i16, width: u16, he
     
     window.conn.free_gc(gc)?;
     Ok(())
-}
+}*/
 
-pub fn draw_widget<T: XConnection>(
-    window: &Window<T>, 
-    info: &DrawFGInfo, 
-    offset: i16,
-    width_max: u16, 
-    renderer: &mut Renderer, 
-    ds: &DrawableSet, 
-    text: &String) -> Result<(),Box<dyn Error>> 
-{
-    let i = info;
-
-    // Text
-    let fgx = i.x + (width_max - i.width) as i16 / 2;
-    let bg = renderer.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &i.font, &ds)?;
-    draw_image(window, offset + fgx, i.fgy, i.width, i.fgheight, &bg)?;
-
-    // Top and bottom borders
-    ds.background.draw_bg(window, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height)?;
-    ds.background.draw_bg(window, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height)?;
-    
-    // Left and right borders
-    ds.background.draw_bg(window, offset + i.x, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
-    ds.background.draw_bg(window, offset + fgx + i.width as i16, i.fgy, (fgx - i.x) as _, i.fgheight, i.height)?;
-
-    Ok(())
-}
 
 impl DrawableSet {
 
@@ -336,6 +360,59 @@ impl DrawableSet {
             }
             else {None}
         }
+    }
+
+    pub fn draw_widget(
+        &self,
+        window: &Window, 
+        info: &DrawFGInfo, 
+        offset: i16,
+        width_max: u16, 
+        text: &String)
+    {
+        let i = info;
+
+        let fchars = text.nfc().formatted(Some(self)).collect::<Vec<_>>();
+        let mut cursor = 0;
+
+        // Change foreground color if the value crosses dim/warn/critical treshold
+        let value = find_human_readable(fchars.iter().filter_map(|x| 
+            if let CharObj::Char(c) = x.0 {Some(c)} else {None}
+        ));
+        let fg = self.value_appearance(value);
+
+        //for (ch, fgc, bgc) in fchars.iter() {
+        //    let fg = fg.unwrap_or(fgc);
+        //}
+
+        // Text
+        let lrborder = (width_max - i.width) as i16 / 2;
+        let fgx = offset + i.x + lrborder;
+        //let bg = renderer.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &i.font, &ds)?;
+        //self.foreground.draw(window, None, offset + fgx, i.fgy, i.width, i.fgheight, i.height);//&bg);
+
+        let mut x = fgx as f64;
+        dbg!(x, i.x, width_max, i.width);
+
+        window.ctx.select_font_face(&i.font[..], cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+        window.set_font_height_px(&i.font, i.fgheight as f64);
+        dbg!(i);
+        
+        // todo - var bg
+        self.background.draw(window, None, fgx, i.fgy as i16, i.width, i.fgheight, i.height);
+        for (ch, fgc, bgc) in fchars {
+            
+            x += fg.unwrap_or(&fgc).draw(window, Some(ch), x as i16, i.fgy - i.yb as i16, i.width, i.fgheight, i.height);
+        }
+
+        // Top and bottom borders
+        self.background.draw(window, None, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height);
+        self.background.draw(window, None, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height);
+        
+        
+        // Left and right borders
+        self.background.draw(window, None, offset + i.x, i.fgy, lrborder as _, i.fgheight, i.height);
+        self.background.draw(window, None, fgx + i.width as i16, i.fgy, lrborder as _, i.fgheight, i.height);
     }
 }
 

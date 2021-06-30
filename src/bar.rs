@@ -2,10 +2,9 @@
 use crate::props::*;
 use crate::window::*;
 use crate::event::Event;
-use crate::font::Renderer;
 use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
-use crate::draw::{Drawable, DrawableSet, DrawFGInfo, draw_widget};
+use crate::draw::{Drawable, DrawableSet, DrawFGInfo};
 
 use std::time::Instant;
 
@@ -28,7 +27,7 @@ struct Widget {
 }
 
 
-pub struct Bar<'a, T: XConnection> {
+pub struct Bar {
     widgets_left: Vec<Widget>,
     widgets_right: Vec<Widget>,
     props: BarProps,
@@ -41,14 +40,13 @@ pub struct Bar<'a, T: XConnection> {
     middle_right: i16,
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
-    window: &'a Window<'a, T>,
-    renderer: Renderer,
+    window: Window,
     cmdstate: CommandSharedState
 }
 
-impl<'a, T: XConnection> Bar<'a, T> {
+impl Bar {
 
-    pub fn create(cfg: BarConfig, window: &'a Window<'a, T>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn create(cfg: BarConfig) -> Self {
 
         let props = BarProps::from(&cfg.props);
 
@@ -63,7 +61,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                     last_event_updated: Event::Default,
                     last_x: 0, 
                     cmd_out: String::new(),
-                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0,font:String::new()},
+                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0,xb:0.0,yb:0.0,font:String::new()},
                     current,
                     mouse_over: false,
                     needs_redraw: false
@@ -72,10 +70,11 @@ impl<'a, T: XConnection> Bar<'a, T> {
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
-        let renderer = Renderer::new(cfg.fonts, &window.fontutils);
+        let window = Window::new().expect("Failed to create window");
+
         let current = props.as_current(&vec![Event::Default], false);
 
-        let mut bar = Self {props, widgets_left, widgets_right, window, renderer, 
+        let mut bar = Self {props, widgets_left, widgets_right, window, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdstate: CommandSharedState::new(),
@@ -84,8 +83,8 @@ impl<'a, T: XConnection> Bar<'a, T> {
             middle_left: 10000,
             middle_right: 0
         };
-        bar.refresh(vec![Event::Default], true, 0, 0)?;
-        Ok(bar)
+        bar.refresh(vec![Event::Default], true, 0, 0);
+        bar
     }
 
     pub fn refresh_widgets(&mut self, 
@@ -142,7 +141,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
             props.action.execute(&mut self.cmdstate);
             
             // New draw info
-            i.drawinfo = DrawFGInfo::new(widget_cursor, 0, height, props.border_factor, &mut self.renderer, &props.font, &i.cmd_out);
+            i.drawinfo = DrawFGInfo::new(&self.window, widget_cursor, 0, height, props.border_factor, &props.font, &i.cmd_out);
 
             // New widget width
             let width = i.drawinfo.width;
@@ -222,7 +221,7 @@ impl<'a, T: XConnection> Bar<'a, T> {
                 
                 let ds = DrawableSet::from(&i.current);
 
-                draw_widget(self.window, &i.drawinfo, 0, i.width_max, &mut self.renderer, &ds, &i.cmd_out)?;
+                ds.draw_widget(&self.window, &i.drawinfo, 0, i.width_max, &i.cmd_out);
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -234,33 +233,41 @@ impl<'a, T: XConnection> Bar<'a, T> {
 
                 let ds = DrawableSet::from(&i.current);
 
-                draw_widget(self.window, &i.drawinfo, self.offset, i.width_max, &mut self.renderer, &ds, &i.cmd_out)?;
+                ds.draw_widget(&self.window, &i.drawinfo, self.offset, i.width_max, &i.cmd_out);
             }
             i.last_x = i.drawinfo.x + self.offset; 
             i.needs_redraw = false;
         }
         // Draw background between widget chunks
         if global_redraw  {
-            self.default_bg.draw_bg(self.window, width_left, 0, (self.offset - width_left) as u16, height, height)?;
+            self.default_bg.draw(&self.window, None, width_left, 0, (self.offset - width_left) as u16, height, height);
         }
         else { 
             if new_middle_left < self.middle_left {
                 let end = self.middle_left.min(new_middle_right);
                 self.middle_right = self.middle_right.max(end);
 
-                self.default_bg.draw_bg(self.window, new_middle_left, 0, (end - new_middle_left) as u16, height, height)?;
+                self.default_bg.draw(&self.window, None, new_middle_left, 0, (end - new_middle_left) as u16, height, height);
             }
             if new_middle_right > self.middle_right {
                 let begin = self.middle_right.max(new_middle_left);
-                self.default_bg.draw_bg(self.window, begin, 0, (new_middle_right - begin) as u16, height, height)?;
+                self.default_bg.draw(&self.window, None, begin, 0, (new_middle_right - begin) as u16, height, height);
             }
         }
 
         self.middle_left = new_middle_left;
         self.middle_right = new_middle_right;
-        self.window.flush()?;
+        self.window.flush();
 
         Ok(())
+    }
+
+    pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {
+        self.window.get_current_events()
+    }
+
+    pub fn flush(&self) {
+        self.window.flush();
     }
 }
 

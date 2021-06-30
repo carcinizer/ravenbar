@@ -7,12 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-x11rb = { version = "0.6" }
+x11rb = { version = "0.6", features = ["allow-unsafe-code", "render"]}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-freetype-rs = "0.26"
-freetype-sys = "0.13"
-fontconfig = "0.2.0"
+cairo-rs = { version = "0.9.1", features = ["xcb"]}
 run_script = "^0.6.3"
 unicode-normalization = "0.1.13"
 dirs = "3.0"

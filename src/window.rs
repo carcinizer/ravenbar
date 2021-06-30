@@ -1,17 +1,19 @@
 
-use crate::font::FontUtils;
+use crate::event::Event;
 
 use std::error::Error;
+use std::collections::HashMap;
+use std::cell::RefCell;
 
 use x11rb::protocol::xproto::*;
-use x11rb::errors::ConnectionError;
-use x11rb::connection::Connection;
+use x11rb::protocol::xproto::{ConnectionExt as _};
+use x11rb::protocol::render::{ConnectionExt as _};
+use x11rb::connection::{Connection, RequestConnection};
 use x11rb::wrapper::ConnectionExt;
 use x11rb::atom_manager;
+use x11rb::xcb_ffi::XCBConnection;
 
-// Just an alias for convenience
-pub trait XConnection: Connection + ConnectionExt {}
-impl<T: Connection + ConnectionExt> XConnection for T {}
+use cairo::{XCBSurface, Context};
 
 
 atom_manager! {
@@ -30,15 +32,17 @@ atom_manager! {
 }
 
 
-pub struct Window<'a, T: XConnection> {
+pub struct Window {
     // Maybe change this in the future
     pub window: u32,
     pub colormap: u32,
-    pub conn: &'a T,
-    pub fontutils: FontUtils,
+    pub conn: XCBConnection,
+    pub surface: XCBSurface,
+    pub ctx: Context,
     pub depth: u8,
+    pub fontheights: RefCell<HashMap<String, f64>>,
 
-    screen: &'a Screen,
+    screen: Screen,
     atoms: Atoms
 }
 
@@ -136,27 +140,112 @@ impl WindowGeometry {
     }
 }
 
+
 /// Get a visual with alpha, hopefully
-fn get_depth_visual(screen: &Screen) -> (u8, Visualid) {
+fn get_depth_visual(screen: &Screen) -> (u8, Visualtype) {
     for i in screen.allowed_depths.iter() {
         if i.depth == 32 {
-           return (i.depth, i.visuals[0].visual_id);
+           return (i.depth, i.visuals[0]);
         }
     }
-    (x11rb::COPY_DEPTH_FROM_PARENT, screen.root_visual)
+    (x11rb::COPY_DEPTH_FROM_PARENT, screen.allowed_depths[screen.root_visual as usize].visuals[0])
 }
 
-impl<T: XConnection> Window<'_, T> {
-    pub fn new<'a>(conn: &'a T, screen_num: usize) -> Result<Window<'a, T>, Box<dyn Error>> {
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct xcb_visualtype_t {
+    pub visual_id: u32,
+    pub class: u8,
+    pub bits_per_rgb_value: u8,
+    pub colormap_entries: u16,
+    pub red_mask: u32,
+    pub green_mask: u32,
+    pub blue_mask: u32,
+    pub pad0: [u8; 4],
+}
+
+impl From<Visualtype> for xcb_visualtype_t {
+    fn from(value: Visualtype) -> xcb_visualtype_t {
+        xcb_visualtype_t {
+            visual_id: value.visual_id,
+            class: value.class.into(),
+            bits_per_rgb_value: value.bits_per_rgb_value,
+            colormap_entries: value.colormap_entries,
+            red_mask: value.red_mask,
+            green_mask: value.green_mask,
+            blue_mask: value.blue_mask,
+            pad0: [0; 4],
+        }
+    }
+}
+
+/// Find a `xcb_visualtype_t` based on its ID number
+fn find_xcb_visualtype(conn: &impl Connection, visual_id: u32) -> Option<xcb_visualtype_t> {
+    for root in &conn.setup().roots {
+        for depth in &root.allowed_depths {
+            for visual in &depth.visuals {
+                if visual.visual_id == visual_id {
+                    return Some((*visual).into());
+                }
+            }
+        }
+    }
+    None
+}
+
+
+fn choose_visual(conn: &XCBConnection, screen_num: usize) -> (u8, Visualid) {
+    let depth = 32;
+    let screen = &conn.setup().roots[screen_num];
+
+    // Try to use XRender to find a visual with alpha support
+    let has_render = conn
+        .extension_information(x11rb::protocol::render::X11_EXTENSION_NAME).unwrap()
+        .is_some();
+    if has_render {
+        let formats = conn.render_query_pict_formats().unwrap().reply().unwrap();
+        // Find the ARGB32 format that must be supported.
+        let format = formats
+            .formats
+            .iter()
+            .filter(|info| (info.type_, info.depth) == (x11rb::protocol::render::PictType::Direct, depth))
+            .filter(|info| {
+                let d = info.direct;
+                (d.red_mask, d.green_mask, d.blue_mask, d.alpha_mask) == (0xff, 0xff, 0xff, 0xff)
+            })
+            .find(|info| {
+                let d = info.direct;
+                (d.red_shift, d.green_shift, d.blue_shift, d.alpha_shift) == (16, 8, 0, 24)
+            });
+        if let Some(format) = format {
+            // Now we need to find the visual that corresponds to this format
+            if let Some(visual) = formats.screens[screen_num]
+                .depths
+                .iter()
+                .flat_map(|d| &d.visuals)
+                .find(|v| v.format == format.id)
+            {
+                return (format.depth, visual.visual);
+            }
+        }
+    }
+    (screen.root_depth, screen.root_visual)
+}
+
+
+impl Window {
+    pub fn new() -> Result<Window, Box<dyn Error>> {
+
+        let (conn, screen_num) = XCBConnection::connect(None).unwrap();
         
-        let screen = &conn.setup().roots[screen_num];
+        let screen = conn.setup().roots[screen_num].clone();
 
-        let (depth, visual) = get_depth_visual(screen);
+        let (depth, mut visual) = choose_visual(&conn, screen_num);
 
-        let window = conn.generate_id()?;
-        let colormap = conn.generate_id()?;
+        let window = conn.generate_id().unwrap();
+        let colormap = conn.generate_id().unwrap();
 
-        conn.create_colormap(ColormapAlloc::None, colormap, screen.root, visual)?.check()?;
+        conn.create_colormap(ColormapAlloc::None, colormap, screen.root, visual).unwrap().check()?;
 
         conn.create_window(depth, window, screen.root,
                            0,0,100,100, 0, WindowClass::InputOutput, visual,
@@ -167,17 +256,25 @@ impl<T: XConnection> Window<'_, T> {
                                 .event_mask(EventMask::ButtonPress
                                           | EventMask::ButtonRelease
                                           | EventMask::Exposure)
-        )?.check()?;
+        ).unwrap().check()?;
 
         
-        conn.change_property8(PropMode::Replace, window, AtomEnum::WM_NAME, AtomEnum::STRING, b"Ravenbar")?;
+        conn.change_property8(PropMode::Replace, window, AtomEnum::WM_NAME, AtomEnum::STRING, b"Ravenbar").unwrap();
 
-        conn.flush()?;
+        conn.flush().unwrap();
 
-        let fontutils = FontUtils::new()?;
-        let atoms = Atoms::new(conn)?.reply()?;
+        let atoms = Atoms::new(&conn).unwrap().reply().unwrap();
 
-        let wnd = Window {window, colormap, conn, fontutils, screen, depth, atoms};
+        let surface = XCBSurface::create(
+            dbg!(unsafe {&cairo::XCBConnection::from_raw_none(conn.get_raw_xcb_connection() as _)}), 
+            dbg!(&cairo::XCBDrawable(window)), 
+            dbg!(unsafe {&cairo::XCBVisualType::from_raw_none(&mut find_xcb_visualtype(&conn, visual).unwrap() as *mut _ as _)}),
+            100, 100
+        ).unwrap();
+
+        let ctx = Context::new(&surface);
+
+        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fontheights: RefCell::new(HashMap::new())};
 
         Ok(wnd)
     }
@@ -207,7 +304,9 @@ impl<T: XConnection> Window<'_, T> {
         let aux = &ConfigureWindowAux::new().x(x as i32).y(y as i32).width(w as u32).height(h as u32);
         self.conn.configure_window(self.window, aux)?;
         
-        self.flush()?;
+        self.flush();
+        self.surface.set_size(w.into(), h.into())?;
+
         Ok(())
     }
 
@@ -224,12 +323,49 @@ impl<T: XConnection> Window<'_, T> {
         self.screen.height_in_pixels
     }
 
-    pub fn get_pointer(&self) -> Result<(i16, i16), Box<dyn Error>> {
-        let pointer = self.conn.query_pointer(self.window)?.reply()?;
-        Ok((pointer.root_x, pointer.root_y))
+    pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {
+        const e: &str = "Failed to poll X events";
+        let pointer = self.conn.query_pointer(self.window).expect(e).reply().expect(e);
+        let ev_opt = self.conn.poll_for_event().expect(e);
+        
+        let mut evec : Vec<Event> = vec![];
+        
+        if let Some(e1) = ev_opt {
+            evec.extend(Event::events_from(e1));
+
+            while let Some(e2) = self.conn.poll_for_event().expect(e) {
+                evec.extend(Event::events_from(e2));
+            }
+        }
+        
+        (evec, pointer.root_x, pointer.root_y)
     }
 
-    pub fn flush(&self) -> Result<(), ConnectionError> {
-        self.conn.flush()
+    pub fn flush(&self) {
+        self.conn.flush().expect("Failed to flush the connection")
+    }
+
+    fn get_height100(&self, font: &String) -> f64 {
+
+        let mut fh = self.fontheights.borrow_mut();
+        *fh.entry(font.clone()).or_insert_with(|| {
+            self.ctx.select_font_face(font, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+            self.ctx.set_font_size(100.0);
+            self.ctx.text_extents("AŹqpdyj").height // some common letters
+        })
+    }
+
+    pub fn set_font_height_px(&self, font: &String, height: f64) {
+
+        let size = 100.0 * height / self.get_height100(font);
+        self.ctx.set_font_size(size);
+    }
+
+    pub fn get_text_extents(&self, text: &String, font: &String, height: f64) -> (f64, f64, f64, f64) {
+        
+        let mul = height / self.get_height100(font);
+        self.ctx.set_font_size(mul * 100.0);
+        let e = self.ctx.text_extents(text);
+        (e.x_bearing, e.y_bearing, e.width, e.height)
     }
 }
