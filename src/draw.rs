@@ -143,22 +143,20 @@ impl Drawable {
         }
     }
 
-    /// Set Cairo source, return whether text can be drawn with plain show_glyphs
-    fn set_source(&self, window: &Window, maxheight: f64) -> bool {
+    fn set_source(&self, window: &Window, maxheight: f64) {
 
         let c = &window.ctx;
 
         let norm = |x| (x as f64) / 255.0;
 
         match self {
-            Self::Color(col) => {c.set_source_rgba(norm(col.r), norm(col.g), norm(col.b), norm(col.a)); true},
+            Self::Color(col) => {c.set_source_rgba(norm(col.r), norm(col.g), norm(col.b), norm(col.a))},
             Self::VGradient(v) => {
                 let src = cairo::LinearGradient::new(0.0, 0.0 as f64, 0.0, maxheight as f64);
                 for (c,i) in v.iter().enumerate() {
                     src.add_color_stop_rgba(c as f64 / (v.len()-1) as f64, norm(i.r),norm(i.g),norm(i.b), norm(i.a));
                 }
                 c.set_source(&src);
-                false
             }
         }
     }
@@ -178,7 +176,7 @@ impl Drawable {
         
         let c = &window.ctx;
 
-        let simple = self.set_source(window, maxheight);
+        self.set_source(window, maxheight);
         
         match &glyphs.glyphs {
             GlyphObj::Str(font_id, font_height, g) => {
@@ -195,13 +193,8 @@ impl Drawable {
                     let x = glyphs.x + x_off;
                     let y = glyphs.y + y_off + ascent - descent;
                     let g = g.iter().map(|g| Glyph {index: g.index, x: g.x+x, y: g.y+y}).collect::<Vec<_>>();
-                    if simple {
-                        c.show_glyphs(&g[..]);
-                    }
-                    else {
-                        c.glyph_path(&g[..]);
-                        c.fill();
-                    }
+
+                    c.show_glyphs(&g[..]);
                 });
             }
         };
