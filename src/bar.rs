@@ -5,8 +5,11 @@ use crate::event::Event;
 use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo};
+use crate::font::Font;
 
 use std::time::Instant;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 struct Widget {
     props : WidgetProps,
@@ -28,8 +31,8 @@ struct Widget {
 
 
 pub struct Bar {
-    widgets_left: Vec<Widget>,
-    widgets_right: Vec<Widget>,
+    widgets_left: Vec<RefCell<Widget>>,
+    widgets_right: Vec<RefCell<Widget>>,
     props: BarProps,
     default_bg: Drawable,
 
@@ -38,11 +41,32 @@ pub struct Bar {
     offset: i16,
     middle_left: i16,
     middle_right: i16,
+    fonts: HashMap<String, Font>,
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: Window,
     cmdstate: CommandSharedState
 }
+
+fn create_widgets(widgets: &Vec<BarConfigWidget>) -> Vec<RefCell<Widget>> {
+    widgets.iter()
+        .map( |widget| {
+            let props = WidgetProps::from(&widget.props);
+            let current = props.as_current(&vec![Event::Default], false);
+            RefCell::new(Widget {
+                props,
+                width_min: 0, width_max:0,
+                last_time_updated: Instant::now(),
+                last_event_updated: Event::Default,
+                last_x: 0, 
+                cmd_out: String::new(),
+                drawinfo: DrawFGInfo::default(),
+                current,
+                mouse_over: false,
+                needs_redraw: false
+        })}).collect()
+}
+
 
 impl Bar {
 
@@ -50,23 +74,6 @@ impl Bar {
 
         let props = BarProps::from(&cfg.props);
 
-        let create_widgets = |widgets: &Vec<BarConfigWidget>| widgets.iter()
-            .map( |widget| {
-                let props = WidgetProps::from(&widget.props);
-                let current = props.as_current(&vec![Event::Default], false);
-                Widget {
-                    props,
-                    width_min: 0, width_max:0,
-                    last_time_updated: Instant::now(),
-                    last_event_updated: Event::Default,
-                    last_x: 0, 
-                    cmd_out: String::new(),
-                    drawinfo: DrawFGInfo {x:0,y:0,width:0,height:0,fgy:0,fgheight:0,xb:0.0,yb:0.0,font:String::new()},
-                    current,
-                    mouse_over: false,
-                    needs_redraw: false
-            }}).collect();
-        
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
@@ -74,11 +81,16 @@ impl Bar {
 
         let current = props.as_current(&vec![Event::Default], false);
 
+        let fonts = cfg.fonts.iter().map(|(k,v)| {
+            (k.clone(), Font::new(&window, v))
+        }).collect();
+
         let mut bar = Self {props, widgets_left, widgets_right, window, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdstate: CommandSharedState::new(),
             default_bg: Drawable::from(cfg.default_bg),
+            fonts,
             offset: 0,
             middle_left: 10000,
             middle_right: 0
@@ -101,11 +113,12 @@ impl Bar {
         let e = events;
 
         let widgets = match side {
-            true => self.widgets_left.iter_mut(),
-            false => self.widgets_right.iter_mut()
+            true => self.widgets_left.iter(),
+            false => self.widgets_right.iter()
         };
 
         for i in widgets {
+            let mut i = i.borrow_mut();
 
             // Determine if mouse is inside widget
             let m = self.fake_geometry
@@ -120,14 +133,12 @@ impl Bar {
             }
             else {bar_redraw || force};
 
-            let props = &i.current;
-
             // Update widget text
-            if force || i.last_time_updated.elapsed().as_millis() > (props.interval * 1000.0) as u128
+            if force || i.last_time_updated.elapsed().as_millis() > (i.current.interval * 1000.0) as u128
                      || i.last_event_updated != i.props.command.get_event(e,m) 
-                     || props.command.updated(&mut self.cmdstate) {
+                     || i.current.command.updated(&mut self.cmdstate) {
                      
-                let new_cmd_out = props.command.execute(&mut self.cmdstate);
+                let new_cmd_out = i.current.command.execute(&mut self.cmdstate);
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = i.props.command.get_event(e,m);
 
@@ -138,10 +149,12 @@ impl Bar {
             }
 
             // Perform action
-            props.action.execute(&mut self.cmdstate);
+            i.current.action.execute(&mut self.cmdstate);
             
             // New draw info
-            i.drawinfo = DrawFGInfo::new(&self.window, widget_cursor, 0, height, props.border_factor, &props.font, &i.cmd_out);
+            let ds = DrawableSet::from(&i.current);
+            let font = self.get_font(&i.current.font);
+            i.drawinfo = DrawFGInfo::new(&self.window, &ds, widget_cursor, 0, height, i.current.border_factor, font, &i.cmd_out);
 
             // New widget width
             let width = i.drawinfo.width;
@@ -215,43 +228,47 @@ impl Bar {
         else {events.iter().find(|x| **x == Event::Expose) != None};
 
         // Redraw left widgets
-        for i in self.widgets_left.iter_mut() {
+        for i in self.widgets_left.iter() {
+            let mut i = i.borrow_mut();
 
             if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
                 
                 let ds = DrawableSet::from(&i.current);
 
-                ds.draw_widget(&self.window, &i.drawinfo, 0, i.width_max, &i.cmd_out);
+                let font = self.get_font(&i.current.font);
+                ds.draw_widget(&self.window, &i.drawinfo, font, 0, i.width_max, &i.cmd_out);
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
         }
         // Redraw right widgets
-        for i in self.widgets_right.iter_mut() {
+        for i in self.widgets_right.iter() {
+            let mut i = i.borrow_mut();
 
             if global_redraw || i.needs_redraw || i.drawinfo.x + self.offset != i.last_x { 
 
                 let ds = DrawableSet::from(&i.current);
 
-                ds.draw_widget(&self.window, &i.drawinfo, self.offset, i.width_max, &i.cmd_out);
+                let font = self.get_font(&i.current.font);
+                ds.draw_widget(&self.window, &i.drawinfo, font, self.offset, i.width_max, &i.cmd_out);
             }
             i.last_x = i.drawinfo.x + self.offset; 
             i.needs_redraw = false;
         }
         // Draw background between widget chunks
         if global_redraw  {
-            self.default_bg.draw(&self.window, None, width_left, 0, (self.offset - width_left) as u16, height, height);
+            self.default_bg.draw_rect(&self.window, width_left as f64, 0.0, (self.offset - width_left) as f64, height as f64, height as f64);
         }
         else { 
             if new_middle_left < self.middle_left {
                 let end = self.middle_left.min(new_middle_right);
                 self.middle_right = self.middle_right.max(end);
 
-                self.default_bg.draw(&self.window, None, new_middle_left, 0, (end - new_middle_left) as u16, height, height);
+                self.default_bg.draw_rect(&self.window, new_middle_left as f64, 0.0, (end - new_middle_left) as f64, height as f64, height as f64);
             }
             if new_middle_right > self.middle_right {
                 let begin = self.middle_right.max(new_middle_left);
-                self.default_bg.draw(&self.window, None, begin, 0, (new_middle_right - begin) as u16, height, height);
+                self.default_bg.draw_rect(&self.window, begin as f64, 0.0, (new_middle_right - begin) as f64, height as f64, height as f64);
             }
         }
 
@@ -268,6 +285,16 @@ impl Bar {
 
     pub fn flush(&self) {
         self.window.flush();
+    }
+
+    fn get_font(&self, font: &String) -> &Font {
+        if let Some(f) = self.fonts.get(font) {
+            f
+        }
+        else if let Some(f) = self.fonts.get(&"default".to_string()) {
+            f
+        }
+        else {panic!("Failed to get custom and fallback font")}
     }
 }
 

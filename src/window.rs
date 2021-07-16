@@ -14,6 +14,8 @@ use x11rb::atom_manager;
 use x11rb::xcb_ffi::XCBConnection;
 
 use cairo::{XCBSurface, Context};
+use freetype::Library;
+use fontconfig::Fontconfig;
 
 
 atom_manager! {
@@ -40,8 +42,10 @@ pub struct Window {
     pub surface: XCBSurface,
     pub ctx: Context,
     pub depth: u8,
-    pub fontheights: RefCell<HashMap<String, f64>>,
+    pub fc: Fontconfig,
+    pub ft: Library,
 
+    fontheights: RefCell<HashMap<String, f64>>,
     screen: Screen,
     atoms: Atoms
 }
@@ -272,9 +276,11 @@ impl Window {
             100, 100
         ).unwrap();
 
-        let ctx = Context::new(&surface);
+        let ctx = Context::new(&surface).expect("Failed to initialize Cairo");
+        let fc = Fontconfig::new().expect("Failed to initialize Fontconfig");
+        let ft = Library::init().expect("Failed to initialize Freetype");
 
-        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fontheights: RefCell::new(HashMap::new())};
+        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fc, ft, fontheights: RefCell::new(HashMap::new())};
 
         Ok(wnd)
     }
@@ -344,17 +350,7 @@ impl Window {
     pub fn flush(&self) {
         self.conn.flush().expect("Failed to flush the connection")
     }
-
-    fn get_height100(&self, font: &String) -> f64 {
-
-        let mut fh = self.fontheights.borrow_mut();
-        *fh.entry(font.clone()).or_insert_with(|| {
-            self.ctx.select_font_face(font, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-            self.ctx.set_font_size(100.0);
-            self.ctx.text_extents("AŹqpdyj").height // some common letters
-        })
-    }
-
+/*
     pub fn set_font_height_px(&self, font: &String, height: f64) {
 
         let size = 100.0 * height / self.get_height100(font);
@@ -365,7 +361,8 @@ impl Window {
         
         let mul = height / self.get_height100(font);
         self.ctx.set_font_size(mul * 100.0);
-        let e = self.ctx.text_extents(text);
+        let e = self.ctx.text_extents(text).unwrap();
         (e.x_bearing, e.y_bearing, e.width, e.height)
     }
+*/
 }

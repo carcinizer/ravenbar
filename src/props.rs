@@ -51,7 +51,7 @@ macro_rules! prop {
     }}
 }
 
-/// A macro for super convenient bar/widget properties declaration
+/// A macro for convenient bar/widget properties declaration
 /// Definitions are at the bottom of props.rs
 macro_rules! prop_struct {
     ($Props:ident, $PropsCurrent:ident, $ConfigProps:ident, 

@@ -10,7 +10,10 @@ edition = "2018"
 x11rb = { version = "0.6", features = ["allow-unsafe-code", "render"]}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-cairo-rs = { version = "0.9.1", features = ["xcb"]}
+cairo-rs = { version = "0.14", features = ["xcb", "freetype"]}
+cairo-sys-rs = {version = "0.14"}
+freetype-rs = "0.26"
+fontconfig = "0.2.1"
 run_script = "^0.6.3"
 unicode-normalization = "0.1.13"
 dirs = "3.0"

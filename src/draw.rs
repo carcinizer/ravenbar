@@ -3,9 +3,9 @@ use crate::window::Window;
 use crate::utils::mix_comp;
 use crate::props::WidgetPropsCurrent;
 use crate::utils::find_human_readable;
-use crate::font::{CharObj, Formatted as _};
+use crate::font::{GlyphObj, GlyphSet, Font, Formatted as _};
 
-use cairo::{TextExtents, Pattern, Operator};
+use cairo::{TextExtents, Pattern, Operator, Glyph};
 use unicode_normalization::UnicodeNormalization;
 
 
@@ -23,17 +23,15 @@ pub enum Drawable {
     VGradient(Vec<Color>)
 }
 
-#[derive(Debug)]
+#[derive(Default)]
 pub struct DrawFGInfo {
     pub x: i16,
     pub y: i16,
     pub width: u16,
     pub height: u16,
+    pub gsets: Vec<GlyphSet>,
     pub fgy: i16,
-    pub fgheight: u16,
-    pub xb: f64,
-    pub yb: f64,
-    pub font: String
+    pub fgheight: u16
 }
 
 pub struct DrawableSet {
@@ -65,18 +63,26 @@ pub struct DrawableSet {
 
 impl DrawFGInfo {
     
-    pub fn new(window: &Window, x: i16, y: i16, height: u16, border_factor: f32, font: &String, text: &String) -> DrawFGInfo {
+    pub fn new(window: &Window, ds: &DrawableSet, x: i16, y: i16, height: u16, border_factor: f32, font: &Font, text: &String) -> DrawFGInfo {
         
         let fgheight = (height as f32 * border_factor).ceil() as _;
-        let fgy = y + ((height - fgheight) / 2) as i16;
+        let fgy = y + ((height as u16 - fgheight) / 2) as i16;
         
         //let width = 10;//renderer.width(text, font, fgheight);
-        // TODO another way of processing it (command vectors?)
-        let fchars = text.nfc().formatted(None).map(|(ch,_,_)| if let CharObj::Char(c) = ch {c} else {'?'}).collect::<String>();
-        let (xb, yb, width, _) = window.get_text_extents(&fchars, font, fgheight as f64);
+
+        let value = find_human_readable(text.chars());
+
+        let gsets = ds.mark_color(value).chars()
+            .chain(text.chars())
+            .nfc()
+            .formatted(window, ds, font, 0.0, fgy as f64, fgheight)
+            .collect::<Vec<_>>();
         
-        // width + 1  - more or less prevent from clipping text
-        DrawFGInfo {x,y,width: width as u16 + 1,height, fgy,fgheight, xb,yb, font: font.clone()}
+        let maxx = gsets.get(gsets.len()-1).and_then(|s| Some(s.x + s.width)).unwrap_or(x as f64);
+        let minx = gsets.get(0).and_then(|s| Some(s.x)).unwrap_or(x as f64);
+        let width = (maxx - minx) as u16;
+
+        DrawFGInfo {gsets, fgy, fgheight, x, y, width, height}
     }
 }
 
@@ -137,110 +143,70 @@ impl Drawable {
         }
     }
 
-    /*
-    pub fn pixel(&self, _x: i16, y: i16, maxheight: u16) -> Color {
-        match self {
-            Self::Color(c) => *c,
-            Self::VGradient(cv) => {
-                let index = ((y as f32)/maxheight as f32) * (cv.len() - 1) as f32;
+    /// Set Cairo source, return whether text can be drawn with plain show_glyphs
+    fn set_source(&self, window: &Window, maxheight: f64) -> bool {
 
-                let color1: Color = cv[index.floor() as usize];
-                let color2: Color = cv[index.ceil() as usize];
-                color1.mix(&color2, index.fract())
-            }
-        }
-    }
-
-    pub fn image(&self, x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> Vec<u8> {
-        let mut v = Vec::with_capacity((width * height) as usize * 4);
-        
-        for iy in y..(y+height as i16) {
-            for ix in x..(x+width as i16) {
-                v.extend(&self.pixel(ix, iy, maxheight).array())
-            }
-        }
-
-        v
-    }
-*/
-
-
-    pub fn draw(&self, window: &Window, mask: Option<CharObj>, x: i16, y: i16, width: u16, height: u16, maxheight: u16) -> f64 {
-        
-        //let string = string;//CharObj::vec_from(string)
         let c = &window.ctx;
 
         let norm = |x| (x as f64) / 255.0;
 
         match self {
-            Self::Color(col) => c.set_source_rgba(norm(col.r), norm(col.g), norm(col.b), norm(col.a)),
+            Self::Color(col) => {c.set_source_rgba(norm(col.r), norm(col.g), norm(col.b), norm(col.a)); true},
             Self::VGradient(v) => {
                 let src = cairo::LinearGradient::new(0.0, 0.0 as f64, 0.0, maxheight as f64);
                 for (c,i) in v.iter().enumerate() {
                     src.add_color_stop_rgba(c as f64 / (v.len()-1) as f64, norm(i.r),norm(i.g),norm(i.b), norm(i.a));
                 }
                 c.set_source(&src);
+                false
             }
-        };
-        
-        let extents = match mask {
-            Some(CharObj::Char(ch)) => {
-                
-                let text = &ch.to_string();
-                c.set_operator(Operator::Over);
-                
-                c.move_to(x as f64, y as f64);
-                c.show_text(text);
-
-                //dbg!(ch,x,y,width,height,maxheight);
-                c.text_extents(text).x_advance
-            }
-            None => {
-                c.set_operator(Operator::Source);
-                c.move_to(x as f64, y as f64);
-                c.rectangle(x as f64, y as f64, width as f64, height as f64);
-                c.fill();
-
-                width as f64
-            }
-        };
-
-        extents
-        
-        /*match self {
-            Drawable::Color(c) => {
-                let gc = window.conn.generate_id()?;
-
-                window.conn.create_gc(gc, window.window, &CreateGCAux::new().foreground(c.as_xcolor()))?;
-
-                let rect = Rectangle {x,y,width,height};
-                window.conn.poly_fill_rectangle(window.window, gc, &[rect])?;
-                
-                window.conn.flush()?;
-
-                window.conn.free_gc(gc)?;
-            }
-            _ => draw_image(window, x, y, width, height, 
-                            &self.image(x, y, width, height, maxheight))?
         }
-        Ok(())*/
+    }
+
+    pub fn draw_rect(&self, window: &Window, x: f64, y: f64, width: f64, height: f64, maxheight: f64) {
+
+        let c = &window.ctx;
+
+        self.set_source(window, maxheight);
+        
+        c.set_operator(Operator::Source);
+        c.rectangle(x, y, width, height);
+        c.fill();
+    }
+
+    pub fn draw_glyphs(&self, window: &Window, glyphs: &GlyphSet, x_off: f64, y_off: f64, font: &Font, maxheight: f64) {
+        
+        let c = &window.ctx;
+
+        let simple = self.set_source(window, maxheight);
+        
+        match &glyphs.glyphs {
+            GlyphObj::Str(font_id, font_height, g) => {
+                
+                font.with_scaled_font(*font_id, *font_height, |sfont| {
+                    //let text = &ch.to_string();
+                    c.set_operator(Operator::Over);
+                    
+                    c.set_scaled_font(sfont);
+                    let (ascent, descent) = c.font_extents()
+                        .and_then(|e| Ok((e.ascent, e.descent)))
+                        .unwrap_or_else(|_| {eprintln!("Failed to get font ascent"); (0.0, 0.0)});
+
+                    let x = glyphs.x + x_off;
+                    let y = glyphs.y + y_off + ascent - descent;
+                    let g = g.iter().map(|g| Glyph {index: g.index, x: g.x+x, y: g.y+y}).collect::<Vec<_>>();
+                    if simple {
+                        c.show_glyphs(&g[..]);
+                    }
+                    else {
+                        c.glyph_path(&g[..]);
+                        c.fill();
+                    }
+                });
+            }
+        };
     }
 }
-
-
-// TODO put somewhere else
-/*fn draw_image(window: &Window, x: i16, y: i16, width: u16, height: u16, data: &Vec<u8>) -> Result<(), Box<dyn Error>> {
-    
-    let gc = window.conn.generate_id()?;
-    window.conn.create_gc(gc, window.window, &CreateGCAux::new())?;
-
-    window.conn.put_image(ImageFormat::ZPixmap, window.window, gc, 
-        width, height, x, y, 0, window.depth, &data)?;
-    
-    window.conn.free_gc(gc)?;
-    Ok(())
-}*/
-
 
 impl DrawableSet {
 
@@ -346,73 +312,44 @@ impl DrawableSet {
         }
     }
 
-    pub fn value_appearance(&self, value: Option<f64>) -> Option<&Drawable> {
+    /// Append red/yellow/grey colors depending on whether the value is below/above a certain treshold
+    pub fn mark_color(&self, value: Option<f64>) -> &str {
         match value {
-            None => None,
+            None => &"",
             Some(x) => if x >= self.critical {
-                Some(&self.red)
+                &"\x1b[031m"
             }
             else if x >= self.warn {
-                Some(&self.yellow)
+                &"\x1b[033m"
             }
             else if x <= self.dim {
-                Some(&self.bright_black)
+                &"\x1b[090m"
             }
-            else {None}
+            else {&""}
         }
     }
 
     pub fn draw_widget(
         &self,
-        window: &Window, 
-        info: &DrawFGInfo, 
+        window: &Window,
+        info: &DrawFGInfo,
+        font: &Font,
         offset: i16,
         width_max: u16, 
         text: &String)
     {
-        let i = info;
-
-        let fchars = text.nfc().formatted(Some(self)).collect::<Vec<_>>();
-        let mut cursor = 0;
-
-        // Change foreground color if the value crosses dim/warn/critical treshold
-        let value = find_human_readable(fchars.iter().filter_map(|x| 
-            if let CharObj::Char(c) = x.0 {Some(c)} else {None}
-        ));
-        let fg = self.value_appearance(value);
-
-        //for (ch, fgc, bgc) in fchars.iter() {
-        //    let fg = fg.unwrap_or(fgc);
-        //}
-
+        let lrborder = (width_max - info.width) as f64 / 2.0;
+        
+        // Background  TODO: varying backgrounds
+        info.gsets.first().and_then::<Option<u8>, _>(|s| {s.bg.draw_rect(window, info.x as f64 + offset as f64, 0.0, width_max as f64, info.height as f64, info.height as f64); None});
         // Text
-        let lrborder = (width_max - i.width) as i16 / 2;
-        let fgx = offset + i.x + lrborder;
-        //let bg = renderer.draw_text(fgx as _,i.fgy as _,i.width, i.fgheight, i.height, &text, &i.font, &ds)?;
-        //self.foreground.draw(window, None, offset + fgx, i.fgy, i.width, i.fgheight, i.height);//&bg);
-
-        let mut x = fgx as f64;
-        dbg!(x, i.x, width_max, i.width);
-
-        window.ctx.select_font_face(&i.font[..], cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-        window.set_font_height_px(&i.font, i.fgheight as f64);
-        dbg!(i);
-        
-        // todo - var bg
-        self.background.draw(window, None, fgx, i.fgy as i16, i.width, i.fgheight, i.height);
-        for (ch, fgc, bgc) in fchars {
+        for i in &info.gsets {
             
-            x += fg.unwrap_or(&fgc).draw(window, Some(ch), x as i16, i.fgy - i.yb as i16, i.width, i.fgheight, i.height);
-        }
 
-        // Top and bottom borders
-        self.background.draw(window, None, offset + i.x, i.y, width_max, (i.fgy - i.y) as _, i.height);
-        self.background.draw(window, None, offset + i.x, i.fgy+i.fgheight as i16, width_max, (i.height - i.fgy as u16 - i.fgheight) as _, i.height);
-        
-        
-        // Left and right borders
-        self.background.draw(window, None, offset + i.x, i.fgy, lrborder as _, i.fgheight, i.height);
-        self.background.draw(window, None, fgx + i.width as i16, i.fgy, lrborder as _, i.fgheight, i.height);
+            // Foreground
+            i.fg.draw_glyphs(window, &i, info.x as f64 + offset as f64 + lrborder, info.y as f64, font, info.height as f64);
+
+        }
     }
 }
 
