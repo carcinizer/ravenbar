@@ -123,16 +123,21 @@ impl<T: std::iter::Iterator<Item = char>> FormattedTextIter<'_, T> {
 
         let buffont = self.buffont.unwrap_or(0);
 
-        let glyphs = self.font.with_scaled_font(buffont, self.height, |sfont| {
-            sfont.text_to_glyphs(0.0,0.0,&self.buffer[..]).unwrap_or_default().0
-        });
+        let (glyphs, extents) = self.font.with_scaled_font(buffont, self.height, |sfont| {
 
-        let extents = self.window.ctx
-            .glyph_extents(&glyphs[..])
-            .unwrap_or(cairo::TextExtents {height: 0.0, width: 0.0, x_advance: 0.0, y_advance: 0.0, x_bearing: 0.0, y_bearing: 0.0});
+            self.window.ctx.set_scaled_font(sfont);
+            let glyphs = sfont.text_to_glyphs(0.0,0.0,&self.buffer[..]).unwrap_or_default().0;
+            let extents = self.window.ctx
+                .glyph_extents(&glyphs[..])
+                .unwrap_or(cairo::TextExtents {height: 0.0, width: 0.0, x_advance: 0.0, y_advance: 0.0, x_bearing: 0.0, y_bearing: 0.0});
+
+            (glyphs, extents)
+        });
 
         self.buffer = if let Some(c) = ch {c.to_string()} else {String::new()};
         self.buffont = font.or(self.buffont);
+
+        dbg!((self.x, extents.x_advance, extents.width));
 
         let x = self.x;
         self.x += extents.x_advance;

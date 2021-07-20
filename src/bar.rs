@@ -117,6 +117,8 @@ impl Bar {
             false => self.widgets_right.iter()
         };
 
+        let mut width_change = 0;
+
         for i in widgets {
             let mut i = i.borrow_mut();
 
@@ -131,7 +133,7 @@ impl Bar {
                 i.current = new_current;
                 true
             }
-            else {bar_redraw || force};
+            else {bar_redraw || force || width_change != 0};
 
             // Update widget text
             if force || i.last_time_updated.elapsed().as_millis() > (i.current.interval * 1000.0) as u128
@@ -151,20 +153,27 @@ impl Bar {
             // Perform action
             i.current.action.execute(&mut self.cmdstate);
             
-            // New draw info
-            let ds = DrawableSet::from(&i.current);
-            let font = self.get_font(&i.current.font);
-            i.drawinfo = DrawFGInfo::new(&self.window, &ds, widget_cursor, 0, height, i.current.border_factor, font, &i.cmd_out);
+            if i.needs_redraw {
+                // New draw info
+                let ds = DrawableSet::from(&i.current);
+                let font = self.get_font(&i.current.font);
+                i.drawinfo = DrawFGInfo::new(&self.window, &ds, widget_cursor, 0, height, i.current.border_factor, font, &i.cmd_out);
 
-            // New widget width
-            let width = i.drawinfo.width;
-            let avg_char_width = if i.cmd_out.len() != 0 {
-                width as u16 / i.cmd_out.len() as u16
-            } else {1};
+                // New widget width
+                let width = i.drawinfo.width;
+                let avg_char_width = if i.cmd_out.len() != 0 {
+                    width as u16 / i.cmd_out.len() as u16
+                } else {1};
 
-            if width > i.width_max || width < i.width_min {
-                i.width_min = width - avg_char_width * 2;
-                i.width_max = width + avg_char_width * 2;
+                if width > i.width_max || width < i.width_min {
+
+                    let width_max_old = i.width_max;
+
+                    i.width_min = width - avg_char_width * 2;
+                    i.width_max = width + avg_char_width * 2;
+                    width_change += width_max_old - i.width_max;
+                    dbg!((i.width_min, i.width_max));
+                }
             }
             
             i.mouse_over = m;
