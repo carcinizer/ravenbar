@@ -2,8 +2,6 @@
 use crate::event::Event;
 
 use std::error::Error;
-use std::collections::HashMap;
-use std::cell::RefCell;
 
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::xproto::{ConnectionExt as _};
@@ -45,7 +43,6 @@ pub struct Window {
     pub fc: Fontconfig,
     pub ft: Library,
 
-    fontheights: RefCell<HashMap<String, f64>>,
     screen: Screen,
     atoms: Atoms
 }
@@ -145,16 +142,6 @@ impl WindowGeometry {
 }
 
 
-/// Get a visual with alpha, hopefully
-fn get_depth_visual(screen: &Screen) -> (u8, Visualtype) {
-    for i in screen.allowed_depths.iter() {
-        if i.depth == 32 {
-           return (i.depth, i.visuals[0]);
-        }
-    }
-    (x11rb::COPY_DEPTH_FROM_PARENT, screen.allowed_depths[screen.root_visual as usize].visuals[0])
-}
-
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct xcb_visualtype_t {
@@ -244,7 +231,7 @@ impl Window {
         
         let screen = conn.setup().roots[screen_num].clone();
 
-        let (depth, mut visual) = choose_visual(&conn, screen_num);
+        let (depth, visual) = choose_visual(&conn, screen_num);
 
         let window = conn.generate_id().unwrap();
         let colormap = conn.generate_id().unwrap();
@@ -270,9 +257,9 @@ impl Window {
         let atoms = Atoms::new(&conn).unwrap().reply().unwrap();
 
         let surface = XCBSurface::create(
-            dbg!(unsafe {&cairo::XCBConnection::from_raw_none(conn.get_raw_xcb_connection() as _)}), 
-            dbg!(&cairo::XCBDrawable(window)), 
-            dbg!(unsafe {&cairo::XCBVisualType::from_raw_none(&mut find_xcb_visualtype(&conn, visual).unwrap() as *mut _ as _)}),
+            unsafe {&cairo::XCBConnection::from_raw_none(conn.get_raw_xcb_connection() as _)}, 
+            &cairo::XCBDrawable(window), 
+            unsafe {&cairo::XCBVisualType::from_raw_none(&mut find_xcb_visualtype(&conn, visual).unwrap() as *mut _ as _)},
             100, 100
         ).unwrap();
 
@@ -280,7 +267,7 @@ impl Window {
         let fc = Fontconfig::new().expect("Failed to initialize Fontconfig");
         let ft = Library::init().expect("Failed to initialize Freetype");
 
-        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fc, ft, fontheights: RefCell::new(HashMap::new())};
+        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fc, ft};
 
         Ok(wnd)
     }
@@ -330,16 +317,16 @@ impl Window {
     }
 
     pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {
-        const e: &str = "Failed to poll X events";
-        let pointer = self.conn.query_pointer(self.window).expect(e).reply().expect(e);
-        let ev_opt = self.conn.poll_for_event().expect(e);
+        const E: &str = "Failed to poll X events";
+        let pointer = self.conn.query_pointer(self.window).expect(E).reply().expect(E);
+        let ev_opt = self.conn.poll_for_event().expect(E);
         
         let mut evec : Vec<Event> = vec![];
         
         if let Some(e1) = ev_opt {
             evec.extend(Event::events_from(e1));
 
-            while let Some(e2) = self.conn.poll_for_event().expect(e) {
+            while let Some(e2) = self.conn.poll_for_event().expect(E) {
                 evec.extend(Event::events_from(e2));
             }
         }
@@ -350,19 +337,4 @@ impl Window {
     pub fn flush(&self) {
         self.conn.flush().expect("Failed to flush the connection")
     }
-/*
-    pub fn set_font_height_px(&self, font: &String, height: f64) {
-
-        let size = 100.0 * height / self.get_height100(font);
-        self.ctx.set_font_size(size);
-    }
-
-    pub fn get_text_extents(&self, text: &String, font: &String, height: f64) -> (f64, f64, f64, f64) {
-        
-        let mul = height / self.get_height100(font);
-        self.ctx.set_font_size(mul * 100.0);
-        let e = self.ctx.text_extents(text).unwrap();
-        (e.x_bearing, e.y_bearing, e.width, e.height)
-    }
-*/
 }

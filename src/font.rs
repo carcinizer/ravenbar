@@ -1,17 +1,11 @@
 
-use crate::draw::{Color, Drawable, DrawableSet, scale};
-use crate::utils::find_human_readable;
+use crate::draw::{Drawable, DrawableSet};
 use crate::window::Window;
 
-use std::error::Error;
 use std::collections::HashMap;
 use std::cell::RefCell;
 
-use cairo_sys;
 use cairo::{Glyph, ScaledFont};
-
-
-use unicode_normalization::UnicodeNormalization;
 
 
 /// An object representing character, and, in the future, images etc.
@@ -136,8 +130,6 @@ impl<T: std::iter::Iterator<Item = char>> FormattedTextIter<'_, T> {
 
         self.buffer = if let Some(c) = ch {c.to_string()} else {String::new()};
         self.buffont = font.or(self.buffont);
-
-        dbg!((self.x, extents.x_advance, extents.width));
 
         let x = self.x;
         self.x += extents.x_advance;

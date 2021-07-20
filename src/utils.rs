@@ -1,6 +1,40 @@
 
-pub fn mix_comp(a: u8, b: u8, factor: f32) -> u8 {
-    (b as f32 * factor + a as f32 * (1.0 - factor)) as _
+
+enum LogType {
+    #[allow(dead_code)]
+    Debug,
+    #[allow(dead_code)]
+    Info,
+    #[allow(dead_code)]
+    Warning,
+    Error
+}
+
+#[macro_export]
+macro_rules! log{($t:expr, $($i:expr),*) => {
+
+    let t = match $t {
+        LogType::Debug => "[DEBUG]",
+        LogType::Info => "[INFO]",
+        LogType::Warning => "[WARNING]",
+        LogType::Error => "[ERROR]",
+    };
+
+    eprint!("[{}]", t);
+    eprintln!($($i),*);
+
+}}
+
+pub trait Log {
+    fn log(&self, category: &str);
+}
+
+impl<T,E> Log for Result<T,E> where E: std::fmt::Display {
+    fn log(&self, category: &str) {
+        if let Err(x) = self {
+            log!(LogType::Error, "In {}: {}", category, x);
+        }
+    }
 }
 
 pub fn human_readable(n: u64) -> String {

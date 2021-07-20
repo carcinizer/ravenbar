@@ -50,8 +50,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     else {
-        //let (conn, screen_num) = x11rb::connect(None)?;
-        
         let config = config::BarConfig::new(file)?;
         let mut files_last_changed = config.get_files_to_watch();
 
@@ -76,7 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             evec.push(Event::Default);
             evec.sort_by_key(|x: &Event| x.precedence());
 
-            b.refresh(evec, false, x,y)?;
+            b.refresh(evec, false, x,y);
             
             std::thread::sleep(std::time::Duration::from_millis(16));
 

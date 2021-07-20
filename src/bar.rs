@@ -6,6 +6,7 @@ use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo};
 use crate::font::Font;
+use crate::utils::Log;
 
 use std::time::Instant;
 use std::cell::RefCell;
@@ -172,7 +173,6 @@ impl Bar {
                     i.width_min = width - avg_char_width * 2;
                     i.width_max = width + avg_char_width * 2;
                     width_change += width_max_old - i.width_max;
-                    dbg!((i.width_min, i.width_max));
                 }
             }
             
@@ -183,7 +183,7 @@ impl Bar {
         widget_cursor 
     }
 
-    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) {
         
         let e = &events;
         
@@ -230,7 +230,7 @@ impl Bar {
         
         let global_redraw = if next_geom != self.geometry {
             self.geometry = next_geom;
-            self.window.configure(&self.geometry)?;
+            self.window.configure(&self.geometry).log("bar refresh - window reconfiguration");
             true
         }
         // Redraw on exposure
@@ -245,7 +245,7 @@ impl Bar {
                 let ds = DrawableSet::from(&i.current);
 
                 let font = self.get_font(&i.current.font);
-                ds.draw_widget(&self.window, &i.drawinfo, font, 0, i.width_max, &i.cmd_out);
+                ds.draw_widget(&self.window, &i.drawinfo, font, 0, i.width_max);
             }
             i.last_x = i.drawinfo.x; 
             i.needs_redraw = false;
@@ -259,7 +259,7 @@ impl Bar {
                 let ds = DrawableSet::from(&i.current);
 
                 let font = self.get_font(&i.current.font);
-                ds.draw_widget(&self.window, &i.drawinfo, font, self.offset, i.width_max, &i.cmd_out);
+                ds.draw_widget(&self.window, &i.drawinfo, font, self.offset, i.width_max);
             }
             i.last_x = i.drawinfo.x + self.offset; 
             i.needs_redraw = false;
@@ -284,8 +284,6 @@ impl Bar {
         self.middle_left = new_middle_left;
         self.middle_right = new_middle_right;
         self.window.flush();
-
-        Ok(())
     }
 
     pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {

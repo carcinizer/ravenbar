@@ -1,11 +1,10 @@
 
 use crate::window::Window;
-use crate::utils::mix_comp;
 use crate::props::WidgetPropsCurrent;
-use crate::utils::find_human_readable;
+use crate::utils::{Log, find_human_readable};
 use crate::font::{GlyphObj, GlyphSet, Font, Formatted as _};
 
-use cairo::{TextExtents, Pattern, Operator, Glyph};
+use cairo::{Operator, Glyph};
 use unicode_normalization::UnicodeNormalization;
 
 
@@ -87,10 +86,6 @@ impl DrawFGInfo {
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self {r,g,b,a}
-    }
-
     pub fn from(s: &str) -> Self {
         if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {
             panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable")
@@ -105,26 +100,6 @@ impl Color {
         else {255};
 
         Self{r,g,b,a: a as u8}
-    }
-
-    pub fn as_xcolor(&self) -> u32 {
-        ((self.a as u32) << 24) | ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
-    }
-
-    pub fn get(&self, i: usize) -> u8 {
-        self.array()[i]
-    }
-
-    pub fn array(&self) -> [u8; 4] {
-        [self.b, self.g, self.r, self.a]
-    }
-
-    pub fn mix(&self, other: &Self, factor: f32) -> Self {
-        let r = mix_comp(self.r, other.r, factor);
-        let g = mix_comp(self.g, other.g, factor);
-        let b = mix_comp(self.b, other.b, factor);
-        let a = mix_comp(self.a, other.a, factor);
-        Self {r,g,b,a}
     }
 }
 
@@ -151,7 +126,7 @@ impl Drawable {
                 for (c,i) in v.iter().enumerate() {
                     src.add_color_stop_rgba(c as f64 / (v.len()-1) as f64, norm(i.r),norm(i.g),norm(i.b), norm(i.a));
                 }
-                c.set_source(&src);
+                c.set_source(&src).log("set_source");
             }
         }
     }
@@ -164,7 +139,7 @@ impl Drawable {
         
         c.set_operator(Operator::Source);
         c.rectangle(x, y, width, height);
-        c.fill();
+        c.fill().log("draw_rect");
     }
 
     pub fn draw_glyphs(&self, window: &Window, glyphs: &GlyphSet, x_off: f64, y_off: f64, font: &Font, maxheight: f64) {
@@ -189,7 +164,7 @@ impl Drawable {
                     let y = glyphs.y + y_off + ascent - descent;
                     let g = g.iter().map(|g| Glyph {index: g.index, x: g.x+x, y: g.y+y}).collect::<Vec<_>>();
 
-                    c.show_glyphs(&g[..]);
+                    c.show_glyphs(&g[..]).log("draw_glyphs");
                 });
             }
         };
@@ -323,52 +298,16 @@ impl DrawableSet {
         info: &DrawFGInfo,
         font: &Font,
         offset: i16,
-        width_max: u16, 
-        text: &String)
+        width_max: u16)
     {
         let lrborder = (width_max - info.width) as f64 / 2.0;
         
         // Background  TODO: varying backgrounds
         info.gsets.first().and_then::<Option<u8>, _>(|s| {s.bg.draw_rect(window, info.x as f64 + offset as f64, 0.0, width_max as f64, info.height as f64, info.height as f64); None});
-        // Text
         for i in &info.gsets {
-            
-
             // Foreground
             i.fg.draw_glyphs(window, &i, info.x as f64 + offset as f64 + lrborder, info.y as f64, font, info.height as f64);
-
         }
     }
 }
 
-
-fn rescale_coord(x: usize, old: usize, new: usize) -> (usize, f32, f32) {
-    let o = (x as f32) * (old as f32) / (new as f32);
-    (o.floor() as usize, o.fract(), 1.0 - o.fract())
-}
-
-
-pub fn scale(original: &Vec<u8>, pitch: usize, oldw: usize, oldh: usize, neww: usize, newh: usize) -> Vec<u8> {
-    let bpp = original.len() / pitch / oldh;
-    let mut v = Vec::with_capacity(neww * newh * bpp);
-
-    let idx = |x,y| pitch*y+x;
-    let o = |(w,i),b| ((*original.get(i*bpp+b).unwrap_or(&0) as f32) * w) as u8;
-
-    for y in 0..newh {
-        let (yo, yl1, yl2) = rescale_coord(y, oldh, newh);
-
-        for x in 0..neww {
-            let (xo, xl1, xl2) = rescale_coord(x, oldw, neww);
-
-            let weights = [(xl1*yl1, idx(xo+0, yo+0)), 
-                           (xl2*yl1, idx(xo+1, yo+0)),
-                           (xl1*yl2, idx(xo+0, yo+1)),
-                           (xl2*yl2, idx(xo+1, yo+1))];
-            for b in 0..bpp {
-                v.push(weights.iter().map(|x| o(*x,b)).sum());
-            }
-        }  
-    }
-    v
-}
