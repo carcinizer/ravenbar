@@ -95,20 +95,15 @@ impl Color {
         if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {
             panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable")
         }
-        let r = u16::from_str_radix(&s[1..3], 16).unwrap();
-        let g = u16::from_str_radix(&s[3..5], 16).unwrap();
-        let b = u16::from_str_radix(&s[5..7], 16).unwrap();
+        let r = u16::from_str_radix(&s[1..3], 16).unwrap() as u8;
+        let g = u16::from_str_radix(&s[3..5], 16).unwrap() as u8;
+        let b = u16::from_str_radix(&s[5..7], 16).unwrap() as u8;
 
         let a = if s.len() == 9 {
             u16::from_str_radix(&s[7..9], 16).unwrap()
         }
         else {255};
 
-        // Premultiply results
-        let r = (r*a/256) as u8;
-        let g = (g*a/256) as u8;
-        let b = (b*a/256) as u8;
-        
         Self{r,g,b,a: a as u8}
     }
 
