@@ -21,7 +21,7 @@ impl<T> Prop<T> {
                 return x;
             }
         }
-        panic!("Somewhere something doesn't have any events!");
+        panic!("Bar/Widget property error (this error should be impossible)");
     }
 
     pub fn get_event(&self, events: &Vec<Event>, mouse_inside: bool) -> Event {
@@ -30,7 +30,7 @@ impl<T> Prop<T> {
                 return i.clone();
             }
         }
-        panic!("Somewhere something doesn't have any events!");
+        panic!("Bar/Widget property error (this error should be impossible)");
     }
 }
 
@@ -90,7 +90,7 @@ macro_rules! prop_struct {
 
             #[allow(dead_code)]
             pub fn mix(&mut self, parent: &Self) -> &Self {
-                $(self.$name = mix_options(&parent.$name, &self.$name);)*
+                $(self.$name = parent.$name.as_ref().or(self.$name.as_ref()).cloned();)*
                 self
             }
         }
@@ -102,13 +102,6 @@ macro_rules! prop_struct {
                 }
             }
         }
-    }
-}
-
-fn mix_options<T: Clone>(parent: &Option<T>, child: &Option<T>) -> Option<T> {
-    match child {
-        Some(x) => Some(x.clone()),
-        None => match parent {Some(y) => Some(y.clone()), None => None}
     }
 }
 
