@@ -67,8 +67,6 @@ impl DrawFGInfo {
         let fgheight = (height as f32 * border_factor).ceil() as _;
         let fgy = y + ((height as u16 - fgheight) / 2) as i16;
         
-        //let width = 10;//renderer.width(text, font, fgheight);
-
         let value = find_human_readable(text.chars());
 
         let gsets = ds.mark_color(value).chars()
@@ -77,8 +75,8 @@ impl DrawFGInfo {
             .formatted(window, ds, font, 0.0, fgy as f64, fgheight)
             .collect::<Vec<_>>();
         
-        let maxx = gsets.get(gsets.len()-1).and_then(|s| Some(s.x + s.width)).unwrap_or(x as f64);
-        let minx = gsets.get(0).and_then(|s| Some(s.x)).unwrap_or(x as f64);
+        let maxx = gsets.last().and_then(|s| Some(s.x + s.width)).unwrap_or(x as f64);
+        let minx = gsets.first().and_then(|s| Some(s.x)).unwrap_or(x as f64);
         let width = (maxx - minx) as u16;
 
         DrawFGInfo {gsets, fgy, fgheight, x, y, width, height}

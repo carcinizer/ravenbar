@@ -107,7 +107,7 @@ impl Bar {
         bar_redraw: bool, 
         mx: i16, my: i16) -> i16 
     {
-        let mut widget_cursor = 0;
+        let mut widget_cursor = 0i16;
         
         let bar = &self.current;
         let height = bar.height;
@@ -172,7 +172,7 @@ impl Bar {
 
                     i.width_min = width - avg_char_width * 2;
                     i.width_max = width + avg_char_width * 2;
-                    width_change += width_max_old - i.width_max;
+                    width_change += width_max_old as i16 - i.width_max as i16;
                 }
             }
             
