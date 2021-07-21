@@ -183,6 +183,23 @@ impl Bar {
         widget_cursor 
     }
 
+    fn draw_widgets(&self, widgets: &Vec<RefCell<Widget>>, global_redraw: bool, offset: i16) {
+
+        for i in widgets.iter() {
+            let mut i = i.borrow_mut();
+
+            if global_redraw || i.needs_redraw || i.drawinfo.x + offset != i.last_x { 
+                
+                let ds = DrawableSet::from(&i.current);
+
+                let font = self.get_font(&i.current.font);
+                ds.draw_widget(&self.window, &i.drawinfo, font, offset, i.width_max);
+            }
+            i.last_x = i.drawinfo.x + offset; 
+            i.needs_redraw = false;
+        }
+    }
+
     pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) {
         
         let e = &events;
@@ -236,34 +253,10 @@ impl Bar {
         // Redraw on exposure
         else {events.iter().find(|x| **x == Event::Expose) != None};
 
-        // Redraw left widgets
-        for i in self.widgets_left.iter() {
-            let mut i = i.borrow_mut();
+        // Redraw widgets
+        self.draw_widgets(&self.widgets_left,  global_redraw, 0);
+        self.draw_widgets(&self.widgets_right, global_redraw, self.offset);
 
-            if global_redraw || i.needs_redraw || i.drawinfo.x != i.last_x { 
-                
-                let ds = DrawableSet::from(&i.current);
-
-                let font = self.get_font(&i.current.font);
-                ds.draw_widget(&self.window, &i.drawinfo, font, 0, i.width_max);
-            }
-            i.last_x = i.drawinfo.x; 
-            i.needs_redraw = false;
-        }
-        // Redraw right widgets
-        for i in self.widgets_right.iter() {
-            let mut i = i.borrow_mut();
-
-            if global_redraw || i.needs_redraw || i.drawinfo.x + self.offset != i.last_x { 
-
-                let ds = DrawableSet::from(&i.current);
-
-                let font = self.get_font(&i.current.font);
-                ds.draw_widget(&self.window, &i.drawinfo, font, self.offset, i.width_max);
-            }
-            i.last_x = i.drawinfo.x + self.offset; 
-            i.needs_redraw = false;
-        }
         // Draw background between widget chunks
         if global_redraw  {
             self.default_bg.draw_rect(&self.window, width_left as f64, 0.0, (self.offset - width_left) as f64, height as f64, height as f64);
