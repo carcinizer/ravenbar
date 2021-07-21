@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.38"
+version = "1.0.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afddf7f520a80dbf76e6f50a35bca42a2331ef227a28b3b6dc5c2e2338d114b1"
+checksum = "595d3cfa7a60d4555cb5067b99f07142a08ea778de5cf993f7b75c7d8fabc486"
 
 [[package]]
 name = "arrayref"
@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "cairo-rs"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d32eecb1e806433cf68063c4548bbdc15cc56d35db19d685ab60909c4c85206"
+checksum = "a408c13bbc04c3337b94194c1a4d04067097439b79dbc1dcbceba299d828b9ea"
 dependencies = [
  "bitflags",
  "cairo-sys-rs",
@@ -388,9 +388,9 @@ dependencies = [
 
 [[package]]
 name = "glib"
-version = "0.14.0"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0028bbfd270d0778540294abca11141d59cb474da4c1f61ca1e11f579c49247"
+checksum = "dbecad7a3a898ee749d491ce2ae0decb0bce9e736f9747bc49159b1cea5d37f4"
 dependencies = [
  "bitflags",
  "futures-channel",
@@ -407,9 +407,9 @@ dependencies = [
 
 [[package]]
 name = "glib-macros"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eb7bdf41972a6f6dab5d72c23d22789f400059a43ba0d72b4bb2f8664d946a9"
+checksum = "2aad66361f66796bfc73f530c51ef123970eb895ffba991a234fcf7bea89e518"
 dependencies = [
  "anyhow",
  "heck",
@@ -678,7 +678,6 @@ version = "0.1.0"
 dependencies = [
  "alsa",
  "cairo-rs",
- "cairo-sys-rs",
  "dirs",
  "dyn-clone",
  "fontconfig",
