@@ -10,11 +10,11 @@ use serde_json::Value;
 use serde::Deserialize;
 
 
-pub struct Prop<T> {
+pub struct Property<T> {
     pub map: HashMap<Event, T>
 }
 
-impl<T> Prop<T> {
+impl<T> Property<T> {
     pub fn get(&self, events: &Vec<Event>, mouse_inside: bool) -> &T {
         for i in events.iter().filter(|x| mouse_inside || !x.mouse_dependent()) {
             if let Some(x) = self.map.get(i) {
@@ -34,7 +34,7 @@ impl<T> Prop<T> {
     }
 }
 
-macro_rules! prop {
+macro_rules! property {
     ($var:expr, $member:ident, $type:ident, $default:expr) => {{
         
         use std::collections::HashMap;
@@ -47,38 +47,38 @@ macro_rules! prop {
                 map.insert(Event::from(k, s), $type::from(x.clone()));
             }
         }
-        Prop {map}
+        Property {map}
     }}
 }
 
 /// A macro for convenient bar/widget properties declaration
-/// Definitions are at the bottom of props.rs
-macro_rules! prop_struct {
-    ($Props:ident, $PropsCurrent:ident, $ConfigProps:ident, 
+/// Definitions are at the bottom of this file
+macro_rules! property_struct {
+    ($Properties:ident, $PropertiesCurrent:ident, $ConfigProperties:ident, 
      $( $name:ident : $type:ident from $rawtype:ident = $default:expr),*) => {
-        pub struct $Props {
-            $(pub $name: Prop<$type>,)*
+        pub struct $Properties {
+            $(pub $name: Property<$type>,)*
         }
 
         #[derive(Clone, PartialEq)]
-        pub struct $PropsCurrent {
+        pub struct $PropertiesCurrent {
             $(pub $name: $type,)*
         }
 
         #[derive(Deserialize, Clone, Debug)]
-        pub struct $ConfigProps {
+        pub struct $ConfigProperties {
             $(pub $name: Option<$rawtype>,)*
         }
 
-        impl $Props {
-            pub fn as_current(&self, e: &Vec<Event>, m: bool) -> $PropsCurrent {
-                $PropsCurrent {
+        impl $Properties {
+            pub fn as_current(&self, e: &Vec<Event>, m: bool) -> $PropertiesCurrent {
+                $PropertiesCurrent {
                     $($name: self.$name.get(e,m).clone(),)*
                 }
             }
         }
 
-        impl Default for $ConfigProps {
+        impl Default for $ConfigProperties {
             fn default() -> Self {
                 Self {
                     $($name: None,)*
@@ -86,7 +86,7 @@ macro_rules! prop_struct {
             }
         }
 
-        impl $ConfigProps {
+        impl $ConfigProperties {
 
             #[allow(dead_code)]
             pub fn mix(&mut self, parent: &Self) -> &Self {
@@ -95,10 +95,10 @@ macro_rules! prop_struct {
             }
         }
 
-        impl $Props {
-            pub fn from(config: &HashMap<(String, String), $ConfigProps>) -> Self {
+        impl $Properties {
+            pub fn from(config: &HashMap<(String, String), $ConfigProperties>) -> Self {
                 Self {
-                    $($name: prop!(config, $name, $type, $default),)*
+                    $($name: property!(config, $name, $type, $default),)*
                 }
             }
         }
@@ -106,7 +106,7 @@ macro_rules! prop_struct {
 }
 
 // Widget properties
-prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps, 
+property_struct!(WidgetProperties, WidgetPropertiesCurrent, BarConfigWidgetProperties, 
              
     foreground:     Drawable from String = Drawable::from("#FFFFFF".to_string()),
     background:     Drawable from String = Drawable::from("#222233".to_string()),
@@ -142,7 +142,7 @@ prop_struct!(WidgetProps, WidgetPropsCurrent, BarConfigWidgetProps,
 );
 
 // Bar properties
-prop_struct!(BarProps, BarPropsCurrent, BarConfigProps, 
+property_struct!(BarProperties, BarPropertiesCurrent, BarConfigProperties, 
 
     alignment:      Direction from String = Direction::from("N".to_string()),
     height:         u16 from u16 = 24,

@@ -45,7 +45,7 @@ struct CommandObject {
 }
 
 
-// This trait is only used when comparing "current" prop structs in order to redraw the widget.
+// This trait is only used when comparing "current" properties in order to redraw the widget.
 // Doing it "the right way" results in a lot of redundant redraws, heavily increasing CPU usage.
 impl PartialEq for Command {
     fn eq(&self, other: &Self) -> bool {

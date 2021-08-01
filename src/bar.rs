@@ -1,5 +1,5 @@
 
-use crate::props::*;
+use crate::properties::*;
 use crate::window::*;
 use crate::event::Event;
 use crate::command::{CommandTrait as _, CommandSharedState};
@@ -13,9 +13,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 struct Widget {
-    props : WidgetProps,
+    properties: WidgetProperties,
 
-    current: WidgetPropsCurrent,
+    current: WidgetPropertiesCurrent,
 
     width_min: u16,
     width_max: u16,
@@ -34,10 +34,10 @@ struct Widget {
 pub struct Bar {
     widgets_left: Vec<RefCell<Widget>>,
     widgets_right: Vec<RefCell<Widget>>,
-    props: BarProps,
+    properties: BarProperties,
     default_bg: Drawable,
 
-    current: BarPropsCurrent,
+    current: BarPropertiesCurrent,
 
     offset: i16,
     middle_left: i16,
@@ -52,10 +52,10 @@ pub struct Bar {
 fn create_widgets(widgets: &Vec<BarConfigWidget>) -> Vec<RefCell<Widget>> {
     widgets.iter()
         .map( |widget| {
-            let props = WidgetProps::from(&widget.props);
-            let current = props.as_current(&vec![Event::Default], false);
+            let properties = WidgetProperties::from(&widget.properties);
+            let current = properties.as_current(&vec![Event::Default], false);
             RefCell::new(Widget {
-                props,
+                properties,
                 width_min: 0, width_max:0,
                 last_time_updated: Instant::now(),
                 last_event_updated: Event::Default,
@@ -73,20 +73,20 @@ impl Bar {
 
     pub fn create(cfg: BarConfig) -> Self {
 
-        let props = BarProps::from(&cfg.props);
+        let properties = BarProperties::from(&cfg.properties);
 
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
 
         let window = Window::new().expect("Failed to create window");
 
-        let current = props.as_current(&vec![Event::Default], false);
+        let current = properties.as_current(&vec![Event::Default], false);
 
         let fonts = cfg.fonts.iter().map(|(k,v)| {
             (k.clone(), Font::new(&window, v))
         }).collect();
 
-        let mut bar = Self {props, widgets_left, widgets_right, window, 
+        let mut bar = Self {properties, widgets_left, widgets_right, window, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
             cmdstate: CommandSharedState::new(),
@@ -128,8 +128,8 @@ impl Bar {
                 .has_point_cropped(mx, my, self.window.screen_width(), self.window.screen_height(),
                                    i.last_x, 0, i.width_max, height);
 
-            // Get widget props and determine whether they changed
-            let new_current = i.props.as_current(e,m);
+            // Get widget properties and determine whether they changed
+            let new_current = i.properties.as_current(e,m);
             i.needs_redraw = if new_current != i.current {
                 i.current = new_current;
                 true
@@ -138,12 +138,12 @@ impl Bar {
 
             // Update widget text
             if force || i.last_time_updated.elapsed().as_millis() > (i.current.interval * 1000.0) as u128
-                     || i.last_event_updated != i.props.command.get_event(e,m) 
+                     || i.last_event_updated != i.properties.command.get_event(e,m) 
                      || i.current.command.updated(&mut self.cmdstate) {
                      
                 let new_cmd_out = i.current.command.execute(&mut self.cmdstate);
                 i.last_time_updated = Instant::now();
-                i.last_event_updated = i.props.command.get_event(e,m);
+                i.last_event_updated = i.properties.command.get_event(e,m);
 
                 if new_cmd_out != i.cmd_out {
                     i.needs_redraw = true;
@@ -207,8 +207,8 @@ impl Bar {
         // Determine if mouse is inside bar
         let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
         
-        // Get bar props and determine whether they changed
-        let new_current = self.props.as_current(e,bm);
+        // Get bar properties and determine whether they changed
+        let new_current = self.properties.as_current(e,bm);
 
         let bar_redraw = if new_current != self.current {
             self.current = new_current;
@@ -239,9 +239,9 @@ impl Bar {
         };
         // Fake geometry in order to support non-insane on-hover window events
         self.fake_geometry = WindowGeometry {
-            xoff: *self.props.xoff.get(e,false), yoff: *self.props.yoff.get(e,false), 
+            xoff: *self.properties.xoff.get(e,false), yoff: *self.properties.yoff.get(e,false), 
             w: width as u16, h: height,
-            dir: *self.props.alignment.get(e,false), 
+            dir: *self.properties.alignment.get(e,false), 
             solid: bar.solid, above: bar.above, below: bar.below, visible: bar.visible
         };
         

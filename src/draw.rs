@@ -1,6 +1,6 @@
 
 use crate::window::Window;
-use crate::props::WidgetPropsCurrent;
+use crate::properties::WidgetPropertiesCurrent;
 use crate::utils::{Log, find_human_readable};
 use crate::font::{GlyphObj, GlyphSet, Font, Formatted as _};
 
@@ -171,32 +171,32 @@ impl Drawable {
 
 impl DrawableSet {
 
-    pub fn from(props: &WidgetPropsCurrent) -> Self {
+    pub fn from(properties: &WidgetPropertiesCurrent) -> Self {
         Self {
-            foreground: props.foreground.clone(),
-            background: props.background.clone(),
+            foreground: properties.foreground.clone(),
+            background: properties.background.clone(),
             
-            black: props.black.clone(),
-            red: props.red.clone(),
-            green: props.green.clone(),
-            yellow: props.yellow.clone(),
-            blue: props.blue.clone(),
-            magenta: props.magenta.clone(),
-            cyan: props.cyan.clone(),
-            white: props.white.clone(),
+            black: properties.black.clone(),
+            red: properties.red.clone(),
+            green: properties.green.clone(),
+            yellow: properties.yellow.clone(),
+            blue: properties.blue.clone(),
+            magenta: properties.magenta.clone(),
+            cyan: properties.cyan.clone(),
+            white: properties.white.clone(),
             
-            bright_black: props.bright_black.clone(),
-            bright_red: props.bright_red.clone(),
-            bright_green: props.bright_green.clone(),
-            bright_yellow: props.bright_yellow.clone(),
-            bright_blue: props.bright_blue.clone(),
-            bright_magenta: props.bright_magenta.clone(),
-            bright_cyan: props.bright_cyan.clone(),
-            bright_white: props.bright_white.clone(),
+            bright_black: properties.bright_black.clone(),
+            bright_red: properties.bright_red.clone(),
+            bright_green: properties.bright_green.clone(),
+            bright_yellow: properties.bright_yellow.clone(),
+            bright_blue: properties.bright_blue.clone(),
+            bright_magenta: properties.bright_magenta.clone(),
+            bright_cyan: properties.bright_cyan.clone(),
+            bright_white: properties.bright_white.clone(),
 
-            warn: props.warn,
-            critical: props.critical,
-            dim: props.dim
+            warn: properties.warn,
+            critical: properties.critical,
+            dim: properties.dim
         }
     }
 

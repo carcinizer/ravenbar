@@ -1,5 +1,5 @@
 
-use crate::props::{BarConfigWidgetProps, BarConfigProps};
+use crate::properties::{BarConfigWidgetProperties, BarConfigProperties};
 
 use std::error::Error;
 use std::fs::{OpenOptions, File};
@@ -30,13 +30,13 @@ pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
 
 #[derive(Debug)]
 pub struct BarConfigWidget {
-    pub props: HashMap<(String, String), BarConfigWidgetProps>,
+    pub properties: HashMap<(String, String), BarConfigWidgetProperties>,
     pub template: HashMap<(String, String), String>
 }
 
 #[derive(Debug)]
 pub struct BarConfig {
-    pub props: HashMap<(String, String), BarConfigProps>,
+    pub properties: HashMap<(String, String), BarConfigProperties>,
     pub widgets_left: Vec<BarConfigWidget>,
     pub widgets_right: Vec<BarConfigWidget>,
     pub default_bg: String,
@@ -50,7 +50,7 @@ impl BarConfig {
         let file = File::open(filename)?;
 
         let mut default_widget = BarConfigWidget::new();
-        let mut bar_props_proto = HashMap::<(String, String), Map<String, Value>>::new();
+        let mut bar_properties_proto = HashMap::<(String, String), Map<String, Value>>::new();
         let mut widget_left_arr = Vec::<Value>::new();
         let mut widget_right_arr = Vec::<Value>::new();
         let mut fonts = HashMap::<String, Vec<String>>::new();
@@ -65,9 +65,9 @@ impl BarConfig {
 
         if let Value::Object(barconfig) = values {
             for (key, val) in barconfig.iter() {
-                let (prop, event, settings) = split_key(key);
+                let (property, event, settings) = split_key(key);
 
-                match &*prop {
+                match &*property {
                     "defaults" => {
                         if event != "default" {
                             panic!("Events are unapplicable to 'defaults' section");
@@ -111,18 +111,18 @@ impl BarConfig {
                         else {panic!("'font' must be either a string or an array of strings")}
                     }
                     _ => {
-                        bar_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
+                        bar_properties_proto.entry((event, settings)).or_default().insert(property, val.to_owned());
                     }
                 }
             }
         }
         else {panic!("Bar config does not contain a JSON root object")} // TODO Result
         
-        // Convert bar props from raw to intermediate form 
-        let props : HashMap<(String, String), BarConfigProps> = bar_props_proto
+        // Convert bar properties from raw to intermediate form 
+        let properties : HashMap<(String, String), BarConfigProperties> = bar_properties_proto
                         .iter().map(|(k,v)| 
                             (k.to_owned(), 
-                             from_value::<BarConfigProps>(Value::Object(v.to_owned()))
+                             from_value::<BarConfigProperties>(Value::Object(v.to_owned()))
                                 .unwrap()) 
                         ).collect();
 
@@ -158,20 +158,20 @@ impl BarConfig {
         let widgets_left  = create_widgets(&widget_left_arr);
         let widgets_right = create_widgets(&widget_right_arr);
 
-        let default_bg = match default_widget.props
+        let default_bg = match default_widget.properties
             .get(&("default".to_string(), String::new())) 
         {
             Some(x) => x.background.clone().unwrap_or("#222233".to_string()),
             None => "#222233".to_string()
         };
 
-        Ok(BarConfig {props, widgets_left, widgets_right, fonts, default_bg})
+        Ok(BarConfig {properties, widgets_left, widgets_right, fonts, default_bg})
     }
 
     pub fn get_files_to_watch(&self) -> HashMap<PathBuf, std::time::SystemTime> {
-        self.props.keys()
-            .chain(self.widgets_left.iter().flat_map(|x| x.props.keys()))
-            .chain(self.widgets_right.iter().flat_map(|x| x.props.keys()))
+        self.properties.keys()
+            .chain(self.widgets_left.iter().flat_map(|x| x.properties.keys()))
+            .chain(self.widgets_right.iter().flat_map(|x| x.properties.keys()))
             .filter(|x| &x.0[..] == "on_file_changed")
             .map(|x| (config_dir().join(&x.1), std::fs::metadata(config_dir().join(&x.1))
                             .expect("File not found").modified()
@@ -182,34 +182,34 @@ impl BarConfig {
 
 impl BarConfigWidget {
     fn new() -> Self {
-        Self { props: HashMap::<(String, String), BarConfigWidgetProps>::new(), template: HashMap::new() }
+        Self { properties: HashMap::<(String, String), BarConfigWidgetProperties>::new(), template: HashMap::new() }
     }
 
     fn create(obj: &Value) -> Result<Self, serde_json::Error> {
 
-        let mut widget_props_proto: HashMap<(String, String), Map<String, Value>> = HashMap::new();
+        let mut widget_properties_proto: HashMap<(String, String), Map<String, Value>> = HashMap::new();
         let mut template: HashMap<(String, String), String> = HashMap::new();
 
         if let Value::Object(values) = obj {
             for (key, val) in values {
-                let (prop, event, settings) = split_key(key);
+                let (property, event, settings) = split_key(key);
                 
-                if prop == "template" {
+                if property == "template" {
                     match val {
                         Value::String(s) => {template.insert((event, settings), s.to_owned());},
                         _ => {panic!("Template name must be a string");}
                     }
                 } else {
-                    widget_props_proto.entry((event, settings)).or_default().insert(prop, val.to_owned());
+                    widget_properties_proto.entry((event, settings)).or_default().insert(property, val.to_owned());
                 }
 
             }
 
             Ok(Self { 
-                props: widget_props_proto
+                properties: widget_properties_proto
                         .iter().map(|(k,v) : (&(String, String), &Map<String, Value>)| 
                             (k.clone(), from_value(Value::Object(v.clone())).unwrap()) 
-                        ).collect::<HashMap<(String, String), BarConfigWidgetProps>>(),
+                        ).collect::<HashMap<(String, String), BarConfigWidgetProperties>>(),
                 template
             })
         }
@@ -217,15 +217,15 @@ impl BarConfigWidget {
     }
 
     fn mix(&mut self, other: &Self, filter: Option<&(String, String)>) -> &mut Self{
-        for (k, p) in other.props.iter()
+        for (k, p) in other.properties.iter()
             .filter(|(k,_)| match filter {
                 Some(s) => *k == s,
                 None => true
             }) 
         {
-            match self.props.get_mut(k) {
+            match self.properties.get_mut(k) {
                 Some(pm) => {pm.mix(p);}
-                None => {self.props.insert(k.to_owned(), p.to_owned());}
+                None => {self.properties.insert(k.to_owned(), p.to_owned());}
             }
         }
         self
@@ -236,10 +236,10 @@ impl BarConfigWidget {
 fn split_key(key: &str) -> (String, String, String) {
     let words: Vec<&str> = key.splitn(3, '.').collect();
 
-    let prop     = words[0].to_owned();
+    let property = words[0].to_owned();
     let event    = words.get(1).unwrap_or(&"default");
     let settings = words.get(2).unwrap_or(&"");
 
-    (prop, event.to_string(), settings.to_string())
+    (property, event.to_string(), settings.to_string())
 }
 

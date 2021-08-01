@@ -6,13 +6,35 @@ It's currently WIP, so things may change.
 
 
 
-## How to write a config:
+## Building/Installation
+
+To build this project, simply clone this repository and run:
+
+`cargo build --release`
+
+
+
+## Usage
+
+Ravenbar is invoked with the config name as an argument:
+
+`ravenbar my_config`
+
+This will use my_config.json stored in your ~/.config/ravenbar folder.
+
+You can write an example config if you don't know where to begin:
+
+`ravenbar --write-example my_config`
+
+
+
+## How to write a config
 
 #### 1. The general structure
 
 A very simple config may look something like this:
 
-```
+```json
 {
     "height": 25,
     "screenwidth": 0.7
@@ -34,9 +56,7 @@ A very simple config may look something like this:
 
 This config will create a bar on top of a screen that takes up 70% of the horizontal space, with a clock on the left that can be hovered on to reveal seconds.
 
-As you can see, the **properties** such as `height` or `background` may be followed by a dot and an **event** to change the widget when the condition is met.
-
-
+As you can see, the **properties** such as `height`, `command` or `background` may be followed by a dot and an **event** to change the widget when the condition is met.
 
 #### 2. Events
 
@@ -51,13 +71,9 @@ Note: Every mouse event is only activated for widget under the cursor in case of
 | `on_release_cont[.button]`   | Activates when the mouse is beign released.                                                                                                          |
 | `on_file_changed.{filename}` | Activates when the file modification date is changed. `filename` is relative to config directory and does no character escaping beyond JSON standard |
 
-
-
 #### 3. Non-property fields
 
 These can not be affected by events.
-
-
 
 Bar fields:
 
@@ -75,8 +91,6 @@ Widget fields:
 | -------------------- | ------------------------------------------------------------------------- |
 | `template[.{event}]` | A pseudoproperty that allows widget to inherit certain template's widgets |
 
-
-
 #### 4. Bar properties
 
 | Property      | Description                                                | Default |
@@ -90,8 +104,6 @@ Widget fields:
 | `above`       | Describes whether bar is displayed above other windows     | false   |
 | `below`       | Describes whether bar is displayed below other windows     | false   |
 | `visible`     | Describes whether bar is visible                           | true    |
-
-
 
 #### 5. Widget properties
 
@@ -124,25 +136,19 @@ Widget fields:
 | `bright_cyan`    | See `black`                                                                                                                                                                                               | #00FFFF |
 | `bright_white`   | See `black`                                                                                                                                                                                               | #FFFFFF |
 
-
-
 #### 6. Appearance
 
 Currently appearance can be a string with one or more hex colors (#RRGGBB or #RRGGBBAA) separated by semicolons, for example "#232334;#23233400" describes a vertical gradient fading from dark grey to transparency.
 
-
-
 #### 7. Commands
 
-Command may be one of the following things:
+Command may be one of the following:
 
 - `"#{text}"` - Display text.
-- `"{command}"` - Execute command periodically and display its output.
-- `"|{command}"` - Pipe command - Run a command in the background and display the last line written to output.
+- `"{command}"` - Execute command periodically and display its output
+- `"|{command}"` - Pipe command - Run a command in the background and display the last line written to output
 - `[{cmd1}, {cmd2}, ...]` - Combine outputs of several commands
-- `{"type": "{type}", ...}` - Builtin command, 
-  
-  
+- `{"type": "{type}", ...}` - Builtin command
 
 A type may be one of the following:
 
@@ -154,8 +160,6 @@ A type may be one of the following:
 | `net_{A}_{B}[_{C}]`     | Net statistics: A is "upload" or "download", B is one of: "bits", "bytes", "packets", "errors", C may be nothing (per second), "since" (since last update) or "total". Example - `net_download_bytes` - current download speed in (k/M/G)bits/s | `network` - network interface name, as reported by `ip addr`                                                            |
 | `alsa_volume_get`       | Get ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name                                                                                           |
 | `alsa_volume_set`       | Set ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name, `volume` - volume change, for example "+5%", "-3%" or "5%" (change volume to exactly 5%) |
-
-
 
 TODO:
 

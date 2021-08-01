@@ -4,7 +4,7 @@ mod font;
 mod config;
 mod window;
 mod command;
-mod props;
+mod properties;
 mod event;
 mod draw;
 mod utils;
