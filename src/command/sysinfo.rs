@@ -93,7 +93,7 @@ impl CommandTrait for MemoryInfoCommand {
                 MemoryInfoValue::Total => human_readable(total) + "B",
                 MemoryInfoValue::Usage => human_readable(usage) + "B",
                 MemoryInfoValue::Free => human_readable(total - usage) + "B",
-                MemoryInfoValue::Percent => format!("{}%", usage as f64 / total as f64),
+                MemoryInfoValue::Percent => format!("{:.0}%", usage as f64 / total as f64 * 100.0),
             }
         }
         else {"ERR".to_string()}
