@@ -1,0 +1,31 @@
+
+height": 25
+screenwidth: 0.6
+
+defaults:
+    foreground: "#CCDDFF"
+
+    # Backgrounds accept multiple colors to support gradients
+    background: "#000000;#00000077"
+    background.on_hover: "#000000"
+
+# Create a template named alt_color
+template.alt_color:
+    foreground: "#CCCC99"
+    # Templates can also have properties with events, accessible by widgets with 'template: ...'
+    # foreground.on_hover: "#FFFFDD"
+
+widgets_left:
+    - command:
+        type: cpu_usage
+        warn: 30
+        critical: 75
+        template: alt_color
+    - command:
+        type: mem_percent
+        warn: 60
+        critical: 80
+        template.on_hover: alt_color
+
+widgets_right:
+    - command: date +%H:%M

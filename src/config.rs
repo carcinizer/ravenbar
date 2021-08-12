@@ -25,7 +25,7 @@ pub fn write_default_config(file: PathBuf) -> Result<(), Box<dyn Error>> {
         .create_new(true)
         .open(file)?;
 
-    cfg.write(include_bytes!("../examples/default.json"))?;
+    cfg.write(include_bytes!("../examples/default.yml"))?;
     Ok(())
 }
 
@@ -73,10 +73,10 @@ impl BarConfig {
                         if event != "default" {
                             panic!("Events are unapplicable to 'defaults' section");
                         }
-                        default_widget = BarConfigWidget::create(val)?;
+                        default_widget = BarConfigWidget::create(val);
                     }
                     "template" => {
-                        match templates.insert(event.clone(), BarConfigWidget::create(val)?) {
+                        match templates.insert(event.clone(), BarConfigWidget::create(val)) {
                             None => (),
                             Some(_) => panic!("Template '{}' already exists", event)
                         }
@@ -124,12 +124,12 @@ impl BarConfig {
                         .iter().map(|(k,v)| 
                             (k.to_owned(), 
                              from_value::<BarConfigProperties>(Value::Mapping(v.to_owned()))
-                                .unwrap()) 
+                                .expect(&format!("Failed to parse bar property (event: {}.{})", k.0, k.1))) 
                         ).collect();
 
         let create_widgets = |widget_arr: &Vec<Value>| widget_arr
                         .iter().map(|v| {
-                            let mut widget = BarConfigWidget::create(v).unwrap();
+                            let mut widget = BarConfigWidget::create(v);
 
                             // Mix with current template
                             for (k, name) in widget.template.clone().iter() {
@@ -186,7 +186,7 @@ impl BarConfigWidget {
         Self { properties: HashMap::<(String, String), BarConfigWidgetProperties>::new(), template: HashMap::new() }
     }
 
-    fn create(obj: &Value) -> Result<Self, serde_yaml::Error> {
+    fn create(obj: &Value) -> Self {
 
         let mut widget_properties_proto: HashMap<(String, String), Mapping> = HashMap::new();
         let mut template: HashMap<(String, String), String> = HashMap::new();
@@ -206,15 +206,19 @@ impl BarConfigWidget {
 
             }
 
-            Ok(Self { 
+            Self { 
                 properties: widget_properties_proto
                         .iter().map(|(k,v) : (&(String, String), &Mapping)| 
-                            (k.clone(), from_value(Value::Mapping(v.clone())).unwrap()) 
+                            (
+                                k.clone(), 
+                                from_value(Value::Mapping(v.clone()))
+                                    .expect(&format!("Failed to parse widget property (event: {}.{})", k.0, k.1)) 
+                            ) 
                         ).collect::<HashMap<(String, String), BarConfigWidgetProperties>>(),
                 template
-            })
+            }
         }
-        else {panic!("Widget must be an object")} //TODO Error handling
+        else {panic!("Widget must be an object")} 
     }
 
     fn mix(&mut self, other: &Self, filter: Option<&(String, String)>) -> &mut Self{

@@ -24,7 +24,7 @@ struct Opt {
     #[structopt(long)]
     example_config: bool,
 
-    /// Bar's config name (config will be read from ~/.config/ravenbar/<name>.json)
+    /// Bar's config name (config will be read from ~/.config/ravenbar/<name>.yml)
     #[structopt(name="CONFIGNAME")]
     config: String,
 }
@@ -42,8 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }?;
 
-    let file = std::path::PathBuf::from(config_dir()).join(opt.config + ".json");
-
+    let file = std::path::PathBuf::from(config_dir()).join(opt.config + ".yml");
     
     if opt.example_config {
         config::write_default_config(file)?;
@@ -69,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             
-            // Will be filtered out in bar's refresh function
+            // Will be filtered out anyway if mouse is not hovering
             evec.push(Event::Hover);
             evec.push(Event::Default);
             evec.sort_by_key(|x: &Event| x.precedence());

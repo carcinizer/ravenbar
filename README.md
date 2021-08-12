@@ -20,7 +20,7 @@ Ravenbar is invoked with the config name as an argument:
 
 `ravenbar my_config`
 
-This will use my_config.json stored in your ~/.config/ravenbar folder.
+This will use my_config.yml stored in your ~/.config/ravenbar folder.
 
 You can write an example config if you don't know where to begin:
 
@@ -34,24 +34,20 @@ You can write an example config if you don't know where to begin:
 
 A very simple config may look something like this:
 
-```json
-{
-    "height": 25,
-    "screenwidth": 0.7
-    "alignment": "N",
+```yaml
+height: 25
+screenwidth: 0.7
+alignment: "N"
 
-    "defaults": {
-        "background": "#333333"
-        "foreground": "#EEEEFF"
-    }
+defaults:
+    background: #333333
+    foreground: #EEEEFF
 
-    "widgets_left": [
-        {
-            "command": "date +%H:%M"
-            "command.on_hover": "date +%H:%M:%S"
-        }
-    ]
-}
+
+widgets_left:
+    - command: date +%H:%M
+      command.on_hover: date +%H:%M:%S
+      interval.on_hover: 0.5
 ```
 
 This config will create a bar on top of a screen that takes up 70% of the horizontal space, with a clock on the left that can be hovered on to reveal seconds.
@@ -60,7 +56,7 @@ As you can see, the **properties** such as `height`, `command` or `background` m
 
 #### 2. Events
 
-Note: Every mouse event is only activated for widget under the cursor in case of widget properties. Some events have optional
+Note: Every mouse event is only activated for widget under the cursor in case of widget properties. Some events accept options after a dot.
 
 | Event name                   | Description                                                                                                                                          |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,7 +65,7 @@ Note: Every mouse event is only activated for widget under the cursor in case of
 | `on_press_cont[.button]`     | Activates when the mouse is beign pressed.                                                                                                           |
 | `on_release[.button]`        | Activates when the mouse is released once.                                                                                                           |
 | `on_release_cont[.button]`   | Activates when the mouse is beign released.                                                                                                          |
-| `on_file_changed.{filename}` | Activates when the file modification date is changed. `filename` is relative to config directory and does no character escaping beyond JSON standard |
+| `on_file_changed.{filename}` | Activates when the file modification date is changed. `filename` is relative to config directory and does no character escaping beyond YAML standard |
 
 #### 3. Non-property fields
 

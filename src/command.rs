@@ -33,7 +33,7 @@ pub struct Command {
     id: u64
 }
 
-// Wrapper for JSON object
+// Wrapper for YAML object
 #[derive(Debug, Deserialize)]
 struct CommandObject {
     r#type: Option<String>,

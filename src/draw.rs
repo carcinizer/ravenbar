@@ -86,7 +86,8 @@ impl DrawFGInfo {
 impl Color {
     pub fn from(s: &str) -> Self {
         if (s.len() != 7 && s.len() != 9) || &s[0..1] != "#" {
-            panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable")
+            let quote_warn = if s.len() == 0 {&" (have you put color string in quotes)"} else {&""};
+            panic!("Only either #RRGGBB or #RRGGBBAA format is currently acceptable, found '{}'{}", s, quote_warn)
         }
         let r = u16::from_str_radix(&s[1..3], 16).unwrap() as u8;
         let g = u16::from_str_radix(&s[3..5], 16).unwrap() as u8;
