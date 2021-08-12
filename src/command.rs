@@ -4,7 +4,7 @@ use std::any::{Any, TypeId};
 use std::hash::{Hasher, Hash};
 use std::collections::hash_map::DefaultHasher;
 
-use serde_json::{Value, from_value};
+use serde_yaml::{Value, from_value};
 use serde::Deserialize;
 use dyn_clone::DynClone;
 
@@ -94,11 +94,11 @@ fn new_command(val: Value) -> Box<dyn CommandTrait> {
             }
         }
         // Note - child commands can have id 0, because they will never be compared
-        Value::Array(v) => Box::new(common::MultiCommand(v.iter()
+        Value::Sequence(v) => Box::new(common::MultiCommand(v.iter()
                         .map(|s| Command::from(s.to_owned()))
                         .collect())),
-        Value::Object(obj) => {
-            let object: CommandObject = from_value(Value::Object(obj)).unwrap();
+        Value::Mapping(obj) => {
+            let object: CommandObject = from_value(Value::Mapping(obj)).unwrap();
             
             if let Some(t) = object.r#type {
                 

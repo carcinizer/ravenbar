@@ -6,7 +6,7 @@ use crate::draw::Drawable;
 
 use std::collections::HashMap;
 
-use serde_json::Value;
+use serde_yaml::Value;
 use serde::Deserialize;
 
 

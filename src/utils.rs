@@ -1,4 +1,5 @@
 
+use serde_yaml::Value;
 
 enum LogType {
     #[allow(dead_code)]
@@ -36,6 +37,32 @@ impl<T,E> Log for Result<T,E> where E: std::fmt::Display {
         }
     }
 }
+
+pub trait YAMLString {
+    fn string(&self) -> &String;
+}
+
+impl YAMLString for Value {
+    fn string(&self) -> &String {
+        match self {
+            Value::String(s) => s,
+            _ => panic!("Config keys/properties must be strings")
+        }
+    }
+}
+
+pub trait YAMLKey {
+    fn yaml_key(self) -> Value;
+}
+
+impl YAMLKey for String {
+    fn yaml_key(self) -> Value {
+        return Value::String(self);
+    }
+}
+
+
+
 
 pub fn human_readable(n: u64) -> String {
     let (div, suffix) : (u64, &str) = 

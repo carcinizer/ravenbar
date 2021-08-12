@@ -1,5 +1,6 @@
 
 use crate::properties::{BarConfigWidgetProperties, BarConfigProperties};
+use crate::utils::{YAMLKey, YAMLString};
 
 use std::error::Error;
 use std::fs::{OpenOptions, File};
@@ -7,7 +8,7 @@ use std::io::Write;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde_json::{Value, from_reader, from_value, Map};
+use serde_yaml::{Value, from_reader, from_value, Mapping};
 
 extern crate dirs;
 
@@ -50,7 +51,7 @@ impl BarConfig {
         let file = File::open(filename)?;
 
         let mut default_widget = BarConfigWidget::new();
-        let mut bar_properties_proto = HashMap::<(String, String), Map<String, Value>>::new();
+        let mut bar_properties_proto = HashMap::<(String, String), Mapping>::new();
         let mut widget_left_arr = Vec::<Value>::new();
         let mut widget_right_arr = Vec::<Value>::new();
         let mut fonts = HashMap::<String, Vec<String>>::new();
@@ -63,9 +64,9 @@ impl BarConfig {
 
         let values : Value = from_reader(file)?;
 
-        if let Value::Object(barconfig) = values {
+        if let Value::Mapping(barconfig) = values {
             for (key, val) in barconfig.iter() {
-                let (property, event, settings) = split_key(key);
+                let (property, event, settings) = split_key(&key.string());
 
                 match &*property {
                     "defaults" => {
@@ -81,13 +82,13 @@ impl BarConfig {
                         }
                     }
                     "widgets_left" => {
-                        if let Value::Array(arr) = val {
+                        if let Value::Sequence(arr) = val {
                             widget_left_arr = arr.clone();
                         }
                         else {panic!("'widgets' value must be an array")}
                     }
                     "widgets_right" => {
-                        if let Value::Array(arr) = val {
+                        if let Value::Sequence(arr) = val {
                             widget_right_arr = arr.clone();
                         }
                         else {panic!("'widgets' value must be an array")}
@@ -96,7 +97,7 @@ impl BarConfig {
                         if let Value::String(s) = val {
                             fonts.insert(event.clone(), vec!(s.clone()));
                         }
-                        else if let Value::Array(a) = val {
+                        else if let Value::Sequence(a) = val {
                             let mut names = Vec::with_capacity(a.len());
                             
                             for i in a.iter() {
@@ -111,18 +112,18 @@ impl BarConfig {
                         else {panic!("'font' must be either a string or an array of strings")}
                     }
                     _ => {
-                        bar_properties_proto.entry((event, settings)).or_default().insert(property, val.to_owned());
+                        bar_properties_proto.entry((event, settings)).or_default().insert(property.yaml_key(), val.to_owned());
                     }
                 }
             }
         }
-        else {panic!("Bar config does not contain a JSON root object")} // TODO Result
+        else {panic!("Bar config does not contain a YAML root object")}
         
         // Convert bar properties from raw to intermediate form 
         let properties : HashMap<(String, String), BarConfigProperties> = bar_properties_proto
                         .iter().map(|(k,v)| 
                             (k.to_owned(), 
-                             from_value::<BarConfigProperties>(Value::Object(v.to_owned()))
+                             from_value::<BarConfigProperties>(Value::Mapping(v.to_owned()))
                                 .unwrap()) 
                         ).collect();
 
@@ -185,14 +186,14 @@ impl BarConfigWidget {
         Self { properties: HashMap::<(String, String), BarConfigWidgetProperties>::new(), template: HashMap::new() }
     }
 
-    fn create(obj: &Value) -> Result<Self, serde_json::Error> {
+    fn create(obj: &Value) -> Result<Self, serde_yaml::Error> {
 
-        let mut widget_properties_proto: HashMap<(String, String), Map<String, Value>> = HashMap::new();
+        let mut widget_properties_proto: HashMap<(String, String), Mapping> = HashMap::new();
         let mut template: HashMap<(String, String), String> = HashMap::new();
 
-        if let Value::Object(values) = obj {
+        if let Value::Mapping(values) = obj {
             for (key, val) in values {
-                let (property, event, settings) = split_key(key);
+                let (property, event, settings) = split_key(key.string());
                 
                 if property == "template" {
                     match val {
@@ -200,15 +201,15 @@ impl BarConfigWidget {
                         _ => {panic!("Template name must be a string");}
                     }
                 } else {
-                    widget_properties_proto.entry((event, settings)).or_default().insert(property, val.to_owned());
+                    widget_properties_proto.entry((event, settings)).or_default().insert(property.yaml_key(), val.to_owned());
                 }
 
             }
 
             Ok(Self { 
                 properties: widget_properties_proto
-                        .iter().map(|(k,v) : (&(String, String), &Map<String, Value>)| 
-                            (k.clone(), from_value(Value::Object(v.clone())).unwrap()) 
+                        .iter().map(|(k,v) : (&(String, String), &Mapping)| 
+                            (k.clone(), from_value(Value::Mapping(v.clone())).unwrap()) 
                         ).collect::<HashMap<(String, String), BarConfigWidgetProperties>>(),
                 template
             })
