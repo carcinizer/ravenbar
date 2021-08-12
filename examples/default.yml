@@ -12,20 +12,22 @@ defaults:
 # Create a template named alt_color
 template.alt_color:
     foreground: "#CCCC99"
-    # Templates can also have properties with events, accessible by widgets with 'template: ...'
-    # foreground.on_hover: "#FFFFDD"
+    # Templates can also have properties with events
+    foreground.on_hover: "#FFFFDD"
 
 widgets_left:
     - command:
         type: cpu_usage
         warn: 30
         critical: 75
-        template: alt_color
+      # Inherits all alt_color's properties
+      template: alt_color
     - command:
         type: mem_percent
         warn: 60
         critical: 80
-        template.on_hover: alt_color
+      # Inherits alt_color's on_hover properties
+      template.on_hover: alt_color
 
 widgets_right:
     - command: date +%H:%M
