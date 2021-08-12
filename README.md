@@ -24,7 +24,7 @@ This will use my_config.yml stored in your ~/.config/ravenbar folder.
 
 You can write an example config if you don't know where to begin:
 
-`ravenbar --write-example my_config`
+`ravenbar --example-config my_config`
 
 
 
