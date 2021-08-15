@@ -1,5 +1,5 @@
 
-use crate::event::Event;
+use crate::event::{Event, EventTrait};
 use crate::command::*;
 use crate::window::Direction;
 use crate::draw::Drawable;

@@ -10,7 +10,7 @@ mod draw;
 mod utils;
 
 use config::config_dir;
-use event::Event;
+use event::{Event, EventTrait};
 
 use std::error::Error;
 

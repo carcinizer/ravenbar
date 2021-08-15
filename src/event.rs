@@ -1,9 +1,15 @@
 
 use crate::config::config_dir;
+use crate::bar::Bar;
 
+use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
+
+use dyn_clone::DynClone;
 use x11rb::protocol::Event as XEvent;
 
-#[derive(PartialEq, Eq, Debug, Hash, Clone)]
+
+#[derive(Debug, Hash, Clone)]
 pub enum Event {
     Default,
     Expose,
@@ -15,8 +21,51 @@ pub enum Event {
     FileChanged(std::path::PathBuf),
 }
 
+pub trait HashedSimple {
+    fn hashed(&self) -> u64;
+}
+
+pub trait EventTrait: HashedSimple + DynClone + Debug {
+    fn precedence(&self) -> u32;
+    fn mouse_dependent(&self) -> bool;
+}
+
+dyn_clone::clone_trait_object!(EventTrait);
+
+pub trait EventListener {
+    fn reported_events(&self) -> &'static[&'static str];
+    fn event(&self, event: &String, settings: &String) -> Event;
+    fn get(&self, bar: &Bar) -> Vec<Event>;
+}
+
+struct EventListeners {
+    listeners: Vec<Box<dyn EventListener>>
+}
+
+/*impl<T> Hash for T 
+where T: EventTrait {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.hashed().hash(h);
+    }
+}
+
+impl<T> PartialEq for T 
+where T: EventTrait {
+    fn eq(&self, other: &Self) -> bool {
+        self.hashed() == other.hashed()
+    }
+}*/
+
+impl<T: Hash> HashedSimple for T {
+    fn hashed(&self) -> u64 {
+        let mut a = std::collections::hash_map::DefaultHasher::new();
+        self.hash(&mut a);
+        a.finish()
+    }
+}
+
 impl Event {
-    pub fn from(event: &String, settings: &String) -> Self { // TODO Errors
+    pub fn from(event: &String, settings: &String) -> Self {
         match &event[..] {
             "default" => Self::Default,
             "on_hover" => Self::Hover,
@@ -38,7 +87,10 @@ impl Event {
         }
     }
 
-    pub fn precedence(&self) -> u32 {
+}
+
+impl EventTrait for Event {
+    fn precedence(&self) -> u32 {
         match self {
             Self::ButtonPress(b) => 101 + add_precedence(b),
             Self::ButtonRelease(b) => 101 + add_precedence(b),
@@ -51,7 +103,7 @@ impl Event {
         }
     }
 
-    pub fn mouse_dependent(&self) -> bool {
+    fn mouse_dependent(&self) -> bool {
         match self {
             Self::Hover => true,
             Self::ButtonPress(_) => true,
@@ -61,6 +113,9 @@ impl Event {
             _ => false
         }
     }
+}
+
+impl EventListeners {
 }
 
 fn mouse_button(s: &String) -> Option<u8> {
