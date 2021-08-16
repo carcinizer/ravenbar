@@ -18,7 +18,7 @@ enum WindowEvent {
     ButtonReleaseCont(Option<u8>)
 }
 
-struct WindowListener {
+pub struct WindowListener {
     button_state: [u8; 256]
 }
 
@@ -93,6 +93,11 @@ impl EventListener for WindowListener {
     }
 }
 
+impl WindowListener {
+    pub fn new() -> Self {
+        Self {button_state: [0u8; 256]}
+    }
+}
 
 fn xevents_to_events(ev: XEvent) -> Vec<Event> {
     match ev {

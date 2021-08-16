@@ -47,13 +47,13 @@ pub struct Bar {
     fake_geometry: WindowGeometry,
     window: Window,
     cmdstate: CommandSharedState,
-    event_listeners: EventListeners
+    event_listeners: RefCell<EventListeners>
 }
 
-fn create_widgets(widgets: &Vec<BarConfigWidget>) -> Vec<RefCell<Widget>> {
+fn create_widgets(widgets: &Vec<BarConfigWidget>, listeners: &mut EventListeners) -> Vec<RefCell<Widget>> {
     widgets.iter()
         .map( |widget| {
-            let properties = WidgetProperties::from(&widget.properties);
+            let properties = WidgetProperties::from(&widget.properties, listeners);
             let current = properties.as_current(&vec![Event::default()], false);
             RefCell::new(Widget {
                 properties,
@@ -74,11 +74,11 @@ impl Bar {
 
     pub fn create(cfg: BarConfig) -> Self {
 
-        let properties = BarProperties::from(&cfg.properties);
-        let mut event_listeners = EventListeners::new();
+        let event_listeners = RefCell::new(EventListeners::new());
+        let properties = BarProperties::from(&cfg.properties, &mut event_listeners.borrow_mut());
 
-        let widgets_left  = create_widgets(&cfg.widgets_left);
-        let widgets_right = create_widgets(&cfg.widgets_right);
+        let widgets_left  = create_widgets(&cfg.widgets_left, &mut event_listeners.borrow_mut());
+        let widgets_right = create_widgets(&cfg.widgets_right, &mut event_listeners.borrow_mut());
 
         let window = Window::new().expect("Failed to create window");
 
@@ -99,7 +99,7 @@ impl Bar {
             middle_right: 0,
             event_listeners
         };
-        bar.refresh(vec![Event::default()], true, 0, 0);
+        bar.refresh(true);
         bar
     }
 
@@ -203,9 +203,10 @@ impl Bar {
         }
     }
 
-    pub fn refresh(&mut self, events: Vec<Event>, force: bool, mx: i16, my: i16) {
-        
-        let e = &events;
+    pub fn refresh(&mut self, force: bool) {
+
+        let (mx, my) = self.window.get_pointer();
+        let e = &self.event_listeners.borrow_mut().get(self);
         
         // Determine if mouse is inside bar
         let bm = self.fake_geometry.has_point(mx, my, self.window.screen_width(), self.window.screen_height());
@@ -220,8 +221,8 @@ impl Bar {
         else {false};
 
         // Refresh widgets & calculate width
-        let width_left  = self.refresh_widgets(true,  &events, force, bar_redraw, mx, my);
-        let width_right = self.refresh_widgets(false, &events, force, bar_redraw, mx, my);
+        let width_left  = self.refresh_widgets(true,  e, force, bar_redraw, mx, my);
+        let width_right = self.refresh_widgets(false, e, force, bar_redraw, mx, my);
 
         let bar = &self.current;
         let height = bar.height;
@@ -254,7 +255,7 @@ impl Bar {
             true
         }
         // Redraw on exposure
-        else {events.iter().find(|x| x.is_expose()) != None};
+        else {e.iter().find(|x| x.is_expose()) != None};
 
         // Redraw widgets
         self.draw_widgets(&self.widgets_left,  global_redraw, 0);
@@ -280,10 +281,6 @@ impl Bar {
         self.middle_left = new_middle_left;
         self.middle_right = new_middle_right;
         self.window.flush();
-    }
-
-    pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {
-        self.window.get_current_events()
     }
 
     pub fn flush(&self) {

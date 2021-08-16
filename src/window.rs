@@ -1,6 +1,4 @@
 
-use crate::event::Event;
-
 use std::error::Error;
 
 use x11rb::protocol::xproto::*;
@@ -316,24 +314,6 @@ impl Window {
 
     pub fn screen_height(&self) -> u16 {
         self.screen.height_in_pixels
-    }
-
-    pub fn get_current_events(&self) -> (Vec<Event>, i16, i16) {
-        const E: &str = "Failed to poll X events";
-        let pointer = self.conn.query_pointer(self.window).expect(E).reply().expect(E);
-        let ev_opt = self.conn.poll_for_event().expect(E);
-        
-        let mut evec : Vec<Event> = vec![];
-        
-        if let Some(e1) = ev_opt {
-            evec.extend(crate::event::events_from(e1));
-
-            while let Some(e2) = self.conn.poll_for_event().expect(E) {
-                evec.extend(crate::event::events_from(e2));
-            }
-        }
-        
-        (evec, pointer.root_x, pointer.root_y)
     }
 
     pub fn get_pointer(&self) -> (i16, i16) {

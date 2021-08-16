@@ -10,9 +10,6 @@ mod draw;
 mod utils;
 
 use config::config_dir;
-use event::{Event, LegacyEvent};
-
-use std::error::Error;
 
 use structopt::StructOpt;
 
@@ -30,7 +27,7 @@ struct Opt {
 }
 
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
 
     let opt = Opt::from_args();
 
@@ -40,30 +37,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             std::io::ErrorKind::AlreadyExists => Ok(()),
             _ => Err(x)
         }
-    }?;
+    }.expect("Failed to check/create config directory");
 
     let file = std::path::PathBuf::from(config_dir()).join(opt.config + ".yml");
     
     if opt.example_config {
-        config::write_default_config(file)?;
-        Ok(())
+        config::write_default_config(file).expect("Failed to write config");
     }
     else {
-        let config = config::BarConfig::new(file)?;
-        let mut files_last_changed = config.get_files_to_watch();
+        let config = config::BarConfig::new(file).expect("Failed to parse config");
 
         let mut b = bar::Bar::create(config);
 
         loop {
-            let (mut evec, x, y) = b.get_current_events();
-
-            // Will be filtered out anyway if mouse is not hovering
-            evec.push(Box::new(LegacyEvent::Hover));
-            evec.push(Box::new(LegacyEvent::Default));
-            evec.sort_by_key(|x: &Event| x.precedence());
-
-            b.refresh(evec, false, x,y);
-            
+            b.refresh(false);
             std::thread::sleep(std::time::Duration::from_millis(16));
 
             b.flush();
