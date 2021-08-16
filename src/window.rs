@@ -324,10 +324,10 @@ impl Window {
         let mut evec : Vec<Event> = vec![];
         
         if let Some(e1) = ev_opt {
-            evec.extend(Event::events_from(e1));
+            evec.extend(crate::event::events_from(e1));
 
             while let Some(e2) = self.conn.poll_for_event().expect(E) {
-                evec.extend(Event::events_from(e2));
+                evec.extend(crate::event::events_from(e2));
             }
         }
         

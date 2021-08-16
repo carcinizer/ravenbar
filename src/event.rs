@@ -10,7 +10,7 @@ use x11rb::protocol::Event as XEvent;
 
 
 #[derive(Debug, Hash, Clone)]
-pub enum Event {
+pub enum LegacyEvent {
     Default,
     Expose,
     Hover,
@@ -21,6 +21,8 @@ pub enum Event {
     FileChanged(std::path::PathBuf),
 }
 
+pub type Event = Box<dyn EventTrait>;
+
 pub trait HashedSimple {
     fn hashed(&self) -> u64;
 }
@@ -28,6 +30,7 @@ pub trait HashedSimple {
 pub trait EventTrait: HashedSimple + DynClone + Debug {
     fn precedence(&self) -> u32;
     fn mouse_dependent(&self) -> bool;
+    fn is_expose(&self) -> bool;
 }
 
 dyn_clone::clone_trait_object!(EventTrait);
@@ -42,54 +45,64 @@ struct EventListeners {
     listeners: Vec<Box<dyn EventListener>>
 }
 
-/*impl<T> Hash for T 
-where T: EventTrait {
+impl Hash for Event {
     fn hash<H: Hasher>(&self, h: &mut H) {
         self.hashed().hash(h);
     }
 }
 
-impl<T> PartialEq for T 
-where T: EventTrait {
+impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
         self.hashed() == other.hashed()
     }
-}*/
+}
 
-impl<T: Hash> HashedSimple for T {
-    fn hashed(&self) -> u64 {
-        let mut a = std::collections::hash_map::DefaultHasher::new();
-        self.hash(&mut a);
-        a.finish()
+impl Eq for Event {}
+
+#[macro_export]
+macro_rules! impl_hashed_simple(($type:ty) => {
+    impl HashedSimple for $type { 
+        fn hashed(&self) -> u64 {
+            let mut a = std::collections::hash_map::DefaultHasher::new();
+            self.hash(&mut a);
+            a.finish()
+        }
+    }
+});
+
+impl_hashed_simple!(LegacyEvent);
+
+impl Default for Event {
+    fn default() -> Self {
+        Box::new(LegacyEvent::Default)
     }
 }
 
-impl Event {
-    pub fn from(event: &String, settings: &String) -> Self {
-        match &event[..] {
-            "default" => Self::Default,
-            "on_hover" => Self::Hover,
-            "on_press" => Self::ButtonPress(mouse_button(settings)),
-            "on_press_cont" => Self::ButtonPressCont(mouse_button(settings)),
-            "on_release" => Self::ButtonRelease(mouse_button(settings)),
-            "on_release_cont" => Self::ButtonReleaseCont(mouse_button(settings)),
-            "on_file_changed" => Self::FileChanged(config_dir().join(settings)),
+impl From<(String, String)> for Event {
+    fn from((event, settings): (String, String)) -> Event {
+        Box::new( match &event[..] {
+            "default" => LegacyEvent::Default,
+            "on_hover" => LegacyEvent::Hover,
+            "on_press" => LegacyEvent::ButtonPress(mouse_button(settings)),
+            "on_press_cont" => LegacyEvent::ButtonPressCont(mouse_button(settings)),
+            "on_release" => LegacyEvent::ButtonRelease(mouse_button(settings)),
+            "on_release_cont" => LegacyEvent::ButtonReleaseCont(mouse_button(settings)),
+            "on_file_changed" => LegacyEvent::FileChanged(config_dir().join(settings)),
             _ => {panic!("Invalid event {}.{}", event, settings)}
-        }
+        })
     }
-
-    pub fn events_from(ev: XEvent) -> Vec<Self> {
-        match ev {
-            XEvent::Expose(_) => vec![Self::Expose],
-            XEvent::ButtonPress(x) => vec![Self::ButtonPress(None), Self::ButtonPress(Some(x.detail))],
-            XEvent::ButtonRelease(x) => vec![Self::ButtonRelease(None), Self::ButtonRelease(Some(x.detail))],
-            _ => { eprintln!("Unknown event: {:?}, reverting to default", ev); vec![Self::Default]}
-        }
-    }
-
 }
 
-impl EventTrait for Event {
+pub fn events_from(ev: XEvent) -> Vec<Event> {
+    match ev {
+        XEvent::Expose(_) => vec![Box::new(LegacyEvent::Expose)],
+        XEvent::ButtonPress(x) => vec![Box::new(LegacyEvent::ButtonPress(None)), Box::new(LegacyEvent::ButtonPress(Some(x.detail)))],
+        XEvent::ButtonRelease(x) => vec![Box::new(LegacyEvent::ButtonRelease(None)), Box::new(LegacyEvent::ButtonRelease(Some(x.detail)))],
+        _ => { eprintln!("Unknown event: {:?}, reverting to default", ev); vec![Box::new(LegacyEvent::Default)]}
+    }
+}
+
+impl EventTrait for LegacyEvent {
     fn precedence(&self) -> u32 {
         match self {
             Self::ButtonPress(b) => 101 + add_precedence(b),
@@ -113,12 +126,19 @@ impl EventTrait for Event {
             _ => false
         }
     }
+
+    fn is_expose(&self) -> bool {
+        match self {
+            Self::Expose => true,
+            _ => false
+        }
+    }
 }
 
 impl EventListeners {
 }
 
-fn mouse_button(s: &String) -> Option<u8> {
+fn mouse_button(s: String) -> Option<u8> {
     match &s[..] {
         "" => None,
         "left" => Some(1), 
@@ -126,7 +146,7 @@ fn mouse_button(s: &String) -> Option<u8> {
         "right" => Some(3), 
         "scroll_up" => Some(4), 
         "scroll_down" => Some(5), 
-        _ => Some(u8::from_str_radix(s, 10)
+        _ => Some(u8::from_str_radix(&s, 10)
                   .expect("Mouse button must be either a number or one of: (left, middle, right, scroll_up, scroll_down)"))
     }
 }

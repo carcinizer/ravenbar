@@ -10,7 +10,7 @@ mod draw;
 mod utils;
 
 use config::config_dir;
-use event::{Event, EventTrait};
+use event::{Event, LegacyEvent};
 
 use std::error::Error;
 
@@ -64,13 +64,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 if newtime > *time {
                     *time = newtime;
-                    evec.push(Event::FileChanged(file.clone()));
+                    evec.push(Box::new(LegacyEvent::FileChanged(file.clone())));
                 }
             }
             
             // Will be filtered out anyway if mouse is not hovering
-            evec.push(Event::Hover);
-            evec.push(Event::Default);
+            evec.push(Box::new(LegacyEvent::Hover));
+            evec.push(Box::new(LegacyEvent::Default));
             evec.sort_by_key(|x: &Event| x.precedence());
 
             b.refresh(evec, false, x,y);

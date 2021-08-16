@@ -1,5 +1,5 @@
 
-use crate::event::{Event, EventTrait};
+use crate::event::Event;
 use crate::command::*;
 use crate::window::Direction;
 use crate::draw::Drawable;
@@ -40,11 +40,11 @@ macro_rules! property {
         use std::collections::HashMap;
         
         let mut map = HashMap::new();
-        map.insert(Event::Default, $default);
+        map.insert(Event::default(), $default);
         
         for ((k,s),v) in $var.iter() {
             if let Some(x) = &v.$member {
-                map.insert(Event::from(k, s), $type::from(x.clone()));
+                map.insert(Event::from((k.clone(), s.clone())), $type::from(x.clone()));
             }
         }
         Property {map}

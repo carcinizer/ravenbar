@@ -53,12 +53,12 @@ fn create_widgets(widgets: &Vec<BarConfigWidget>) -> Vec<RefCell<Widget>> {
     widgets.iter()
         .map( |widget| {
             let properties = WidgetProperties::from(&widget.properties);
-            let current = properties.as_current(&vec![Event::Default], false);
+            let current = properties.as_current(&vec![Event::default()], false);
             RefCell::new(Widget {
                 properties,
                 width_min: 0, width_max:0,
                 last_time_updated: Instant::now(),
-                last_event_updated: Event::Default,
+                last_event_updated: Event::default(),
                 last_x: 0, 
                 cmd_out: String::new(),
                 drawinfo: DrawFGInfo::default(),
@@ -80,7 +80,7 @@ impl Bar {
 
         let window = Window::new().expect("Failed to create window");
 
-        let current = properties.as_current(&vec![Event::Default], false);
+        let current = properties.as_current(&vec![Event::default()], false);
 
         let fonts = cfg.fonts.iter().map(|(k,v)| {
             (k.clone(), Font::new(&window, v))
@@ -96,7 +96,7 @@ impl Bar {
             middle_left: 10000,
             middle_right: 0
         };
-        bar.refresh(vec![Event::Default], true, 0, 0);
+        bar.refresh(vec![Event::default()], true, 0, 0);
         bar
     }
 
@@ -251,7 +251,7 @@ impl Bar {
             true
         }
         // Redraw on exposure
-        else {events.iter().find(|x| **x == Event::Expose) != None};
+        else {events.iter().find(|x| x.is_expose()) != None};
 
         // Redraw widgets
         self.draw_widgets(&self.widgets_left,  global_redraw, 0);
