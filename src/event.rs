@@ -8,6 +8,7 @@ use dyn_clone::DynClone;
 use x11rb::protocol::Event as XEvent;
 
 mod files;
+mod window;
 
 #[derive(Debug, Hash, Clone)]
 pub enum LegacyEvent {

@@ -35,6 +35,7 @@ atom_manager! {
 pub struct Window {
     // Maybe change this in the future
     pub window: u32,
+    pub root: u32,
     pub colormap: u32,
     pub conn: XCBConnection,
     pub surface: XCBSurface,
@@ -230,15 +231,16 @@ impl Window {
         let (conn, screen_num) = XCBConnection::connect(None).unwrap();
         
         let screen = conn.setup().roots[screen_num].clone();
+        let root = screen.root;
 
         let (depth, visual) = choose_visual(&conn, screen_num);
 
         let window = conn.generate_id().unwrap();
         let colormap = conn.generate_id().unwrap();
 
-        conn.create_colormap(ColormapAlloc::None, colormap, screen.root, visual).unwrap().check()?;
+        conn.create_colormap(ColormapAlloc::None, colormap, root, visual).unwrap().check()?;
 
-        conn.create_window(depth, window, screen.root,
+        conn.create_window(depth, window, root,
                            0,0,100,100, 0, WindowClass::InputOutput, visual,
                            &CreateWindowAux::new()
                                 .background_pixel(x11rb::NONE)
@@ -267,7 +269,7 @@ impl Window {
         let fc = Fontconfig::new().expect("Failed to initialize Fontconfig");
         let ft = Library::init().expect("Failed to initialize Freetype");
 
-        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fc, ft};
+        let wnd = Window {window, colormap, conn, surface, ctx, screen, depth, atoms, fc, ft, root};
 
         Ok(wnd)
     }
@@ -332,6 +334,14 @@ impl Window {
         }
         
         (evec, pointer.root_x, pointer.root_y)
+    }
+
+    pub fn get_pointer(&self) -> (i16, i16) {
+        const E: &str = "Failed to query pointer";
+        
+        let pointer = self.conn.query_pointer(self.root).expect(E).reply().expect(E);
+        
+        (pointer.root_x, pointer.root_y)
     }
 
     pub fn flush(&self) {

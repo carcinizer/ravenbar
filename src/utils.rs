@@ -1,7 +1,7 @@
 
 use serde_yaml::Value;
 
-enum LogType {
+pub enum LogType {
     #[allow(dead_code)]
     Debug,
     #[allow(dead_code)]

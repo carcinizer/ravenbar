@@ -299,5 +299,9 @@ impl Bar {
         }
         else {panic!("Failed to get custom and fallback font")}
     }
+
+    pub fn get_window(&self) -> &Window {
+        &self.window
+    }
 }
 
