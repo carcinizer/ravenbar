@@ -58,7 +58,7 @@ impl PartialEq for Event {
 impl Eq for Event {}
 
 #[macro_export]
-macro_rules! impl_hashed_simple(($type:ty) => {
+macro_rules! impl_hashed_simple(($type:ty, $id:expr) => {
     use crate::event::HashedSimple as HS;
     use std::hash::Hash;
     use std::hash::Hasher;
@@ -67,6 +67,7 @@ macro_rules! impl_hashed_simple(($type:ty) => {
         fn hashed(&self) -> u64 {
             let mut a = std::collections::hash_map::DefaultHasher::new();
             self.hash(&mut a);
+            $id.hash(&mut a);
             a.finish()
         }
     }
@@ -112,6 +113,8 @@ impl EventListeners {
         for i in self.listeners.iter_mut() {
             i.get(bar, &mut v);
         }
+
+        v.sort_by_key(|x| x.precedence());
         v
     }
 }

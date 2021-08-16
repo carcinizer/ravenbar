@@ -23,7 +23,7 @@ pub struct WindowListener {
 }
 
 
-crate::impl_hashed_simple!(WindowEvent);
+crate::impl_hashed_simple!(WindowEvent, 100020);
 
 impl EventTrait for WindowEvent {
     fn precedence(&self) -> u32 {
@@ -90,6 +90,8 @@ impl EventListener for WindowListener {
                 v.extend(xevents_to_events(e2));
             }
         }
+
+        v.push(Box::new(WindowEvent::Hover))
     }
 }
 

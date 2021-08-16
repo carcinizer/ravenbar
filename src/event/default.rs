@@ -15,7 +15,7 @@ impl EventTrait for DefaultEvent {
     fn is_expose(&self) -> bool {false}
 }
 
-crate::impl_hashed_simple!(DefaultEvent);
+crate::impl_hashed_simple!(DefaultEvent, 100000);
 
 impl EventListener for DefaultListener {
     

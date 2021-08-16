@@ -21,7 +21,7 @@ impl EventTrait for FileChanged {
     fn is_expose(&self) -> bool {false}
 }
 
-crate::impl_hashed_simple!(FileChanged);
+crate::impl_hashed_simple!(FileChanged, 100010);
 
 
 impl FilesListener {
