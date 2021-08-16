@@ -1,7 +1,7 @@
 
 use crate::properties::*;
 use crate::window::*;
-use crate::event::Event;
+use crate::event::{Event, EventListeners};
 use crate::command::{CommandTrait as _, CommandSharedState};
 use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo};
@@ -46,7 +46,8 @@ pub struct Bar {
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: Window,
-    cmdstate: CommandSharedState
+    cmdstate: CommandSharedState,
+    event_listeners: EventListeners
 }
 
 fn create_widgets(widgets: &Vec<BarConfigWidget>) -> Vec<RefCell<Widget>> {
@@ -74,6 +75,7 @@ impl Bar {
     pub fn create(cfg: BarConfig) -> Self {
 
         let properties = BarProperties::from(&cfg.properties);
+        let mut event_listeners = EventListeners::new();
 
         let widgets_left  = create_widgets(&cfg.widgets_left);
         let widgets_right = create_widgets(&cfg.widgets_right);
@@ -94,7 +96,8 @@ impl Bar {
             fonts,
             offset: 0,
             middle_left: 10000,
-            middle_right: 0
+            middle_right: 0,
+            event_listeners
         };
         bar.refresh(vec![Event::default()], true, 0, 0);
         bar

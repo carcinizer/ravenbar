@@ -57,17 +57,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         loop {
             let (mut evec, x, y) = b.get_current_events();
 
-            // Monitor files, TODO migrate to inotify
-            for (file, time) in files_last_changed.iter_mut() {
-                let newtime = std::fs::metadata(file).expect("File not found")
-                    .modified().expect("Could not get file modification time");
-
-                if newtime > *time {
-                    *time = newtime;
-                    evec.push(Box::new(LegacyEvent::FileChanged(file.clone())));
-                }
-            }
-            
             // Will be filtered out anyway if mouse is not hovering
             evec.push(Box::new(LegacyEvent::Hover));
             evec.push(Box::new(LegacyEvent::Default));

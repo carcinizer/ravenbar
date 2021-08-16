@@ -1,13 +1,13 @@
 
-use crate::config::config_dir;
 use crate::bar::Bar;
 
 use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 
 use dyn_clone::DynClone;
 use x11rb::protocol::Event as XEvent;
 
+mod files;
 
 #[derive(Debug, Hash, Clone)]
 pub enum LegacyEvent {
@@ -18,7 +18,6 @@ pub enum LegacyEvent {
     ButtonPressCont(Option<u8>),
     ButtonRelease(Option<u8>),
     ButtonReleaseCont(Option<u8>),
-    FileChanged(std::path::PathBuf),
 }
 
 pub type Event = Box<dyn EventTrait>;
@@ -36,13 +35,20 @@ pub trait EventTrait: HashedSimple + DynClone + Debug {
 dyn_clone::clone_trait_object!(EventTrait);
 
 pub trait EventListener {
+
+    /// List event names that this listener support
     fn reported_events(&self) -> &'static[&'static str];
-    fn event(&self, event: &String, settings: &String) -> Event;
-    fn get(&self, bar: &Bar) -> Vec<Event>;
+    
+    /// Create event object from event description and optionally remember its settings
+    fn event(&mut self, event: &String, settings: &String) -> Event;
+    
+    /// Add events to the event vector
+    fn get(&mut self, bar: &Bar, v: &mut Vec<Event>);
 }
 
-struct EventListeners {
-    listeners: Vec<Box<dyn EventListener>>
+pub struct EventListeners {
+    listeners: Vec<Box<dyn EventListener>>,
+    event_map: HashMap<String, usize>
 }
 
 impl Hash for Event {
@@ -61,7 +67,11 @@ impl Eq for Event {}
 
 #[macro_export]
 macro_rules! impl_hashed_simple(($type:ty) => {
-    impl HashedSimple for $type { 
+    use crate::event::HashedSimple as HS;
+    use std::hash::Hash;
+    use std::hash::Hasher;
+
+    impl HS for $type { 
         fn hashed(&self) -> u64 {
             let mut a = std::collections::hash_map::DefaultHasher::new();
             self.hash(&mut a);
@@ -87,7 +97,6 @@ impl From<(String, String)> for Event {
             "on_press_cont" => LegacyEvent::ButtonPressCont(mouse_button(settings)),
             "on_release" => LegacyEvent::ButtonRelease(mouse_button(settings)),
             "on_release_cont" => LegacyEvent::ButtonReleaseCont(mouse_button(settings)),
-            "on_file_changed" => LegacyEvent::FileChanged(config_dir().join(settings)),
             _ => {panic!("Invalid event {}.{}", event, settings)}
         })
     }
@@ -109,7 +118,6 @@ impl EventTrait for LegacyEvent {
             Self::ButtonRelease(b) => 101 + add_precedence(b),
             Self::ButtonPressCont(b) => 102 + add_precedence(b),
             Self::ButtonReleaseCont(b) => 102 + add_precedence(b),
-            Self::FileChanged(_) => 150,
             Self::Expose => 160,
             Self::Hover => 200,
             Self::Default => 1000
@@ -136,6 +144,37 @@ impl EventTrait for LegacyEvent {
 }
 
 impl EventListeners {
+    pub fn new() -> Self {
+        
+        let listeners: Vec<Box<dyn EventListener>> = vec![
+            Box::new(files::FilesListener::new())
+        ];
+
+        let event_map = listeners.iter()
+            .enumerate()
+            .flat_map(|(c,x)| x.reported_events().iter().map(move |i| (c,i)))
+            .map(|(c, x)| (x.to_string(), c))
+            .collect();
+
+        Self {listeners, event_map}
+    }
+
+    pub fn event(&mut self, event: &String, settings: &String) -> Event {
+        let e = || panic!("Invalid event {}.{}: No listener found for this event", event, settings);
+
+        self.listeners[*self.event_map.get(event).unwrap_or_else(e)]
+            .event(event, settings)
+    }
+
+    pub fn get(&mut self, bar: &Bar) -> Vec<Event> {
+
+        let mut v = Vec::with_capacity(10);
+
+        for i in self.listeners.iter_mut() {
+            i.get(bar, &mut v);
+        }
+        v
+    }
 }
 
 fn mouse_button(s: String) -> Option<u8> {
