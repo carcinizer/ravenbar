@@ -3,9 +3,7 @@ use super::{Event, EventTrait, EventListener};
 use crate::bar::Bar;
 use crate::utils::LogType;
 
-use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event as XEvent;
-use x11rb::protocol::xproto::{ConnectionExt as _};
 use x11rb::connection::Connection;
 
 #[derive(Debug, Clone, Hash)]
@@ -19,7 +17,8 @@ enum WindowEvent {
 }
 
 pub struct WindowListener {
-    button_state: [u8; 256]
+    button_state: [bool; 32],
+    num_buttons_pressed: usize
 }
 
 
@@ -84,12 +83,27 @@ impl EventListener for WindowListener {
         let ev_opt = conn.poll_for_event().expect(E);
         
         if let Some(e1) = ev_opt {
-            v.extend(xevents_to_events(e1));
+            self.xevents_to_events(e1, v);
 
             while let Some(e2) = conn.poll_for_event().expect(E) {
-                v.extend(xevents_to_events(e2));
+                self.xevents_to_events(e2, v);
             }
         }
+
+        for i in 0u8..32u8 {
+            v.push( Box::new( if self.button_state[i as usize] {
+                WindowEvent::ButtonPressCont(Some(i))
+            } else {
+                WindowEvent::ButtonReleaseCont(Some(i))
+            }));
+        }
+
+        v.push( Box::new( if self.num_buttons_pressed > 0 {
+            WindowEvent::ButtonPressCont(None)
+        } else {
+            WindowEvent::ButtonReleaseCont(None)
+        }));
+        
 
         v.push(Box::new(WindowEvent::Hover))
     }
@@ -97,18 +111,40 @@ impl EventListener for WindowListener {
 
 impl WindowListener {
     pub fn new() -> Self {
-        Self {button_state: [0u8; 256]}
+        Self {button_state: [false; 32], num_buttons_pressed: 0}
+    }
+
+    fn xevents_to_events(&mut self, ev: XEvent, v: &mut Vec<Event>) {
+        let mut fallback = false;
+        let warn_too_large_id = |x| {crate::log!(LogType::Warning, "Mouse button with ID above 31 pressed ({}), not registering continuous events", x);};
+
+        match ev {
+            XEvent::Expose(_) => v.push(Box::new(WindowEvent::Expose)),
+            XEvent::ButtonPress(x) => {
+                v.push(Box::new(WindowEvent::ButtonPress(None)));
+                v.push(Box::new(WindowEvent::ButtonPress(Some(x.detail))));
+
+                let state = self.button_state.get_mut(x.detail as usize).unwrap_or_else(|| {warn_too_large_id(x.detail); &mut fallback});
+                if *state == false {
+                    *state = true;
+                    self.num_buttons_pressed += 1;
+                }
+            },
+            XEvent::ButtonRelease(x) => {
+                v.push(Box::new(WindowEvent::ButtonRelease(None))); 
+                v.push(Box::new(WindowEvent::ButtonRelease(Some(x.detail))));
+
+                let state = self.button_state.get_mut(x.detail as usize).unwrap_or_else(|| {warn_too_large_id(x.detail); &mut fallback});
+                if *state == true {
+                    *state = false;
+                    self.num_buttons_pressed -= 1;
+                }
+            },
+            _ => { crate::log!(LogType::Warning, "Unknown X event {:?}", ev); }
+        }
     }
 }
 
-fn xevents_to_events(ev: XEvent) -> Vec<Event> {
-    match ev {
-        XEvent::Expose(_) => vec![Box::new(WindowEvent::Expose)],
-        XEvent::ButtonPress(x) => vec![Box::new(WindowEvent::ButtonPress(None)), Box::new(WindowEvent::ButtonPress(Some(x.detail)))],
-        XEvent::ButtonRelease(x) => vec![Box::new(WindowEvent::ButtonRelease(None)), Box::new(WindowEvent::ButtonRelease(Some(x.detail)))],
-        _ => { crate::log!(LogType::Warning, "Unknown X event {:?}", ev); vec![]}
-    }
-}
 
 
 fn mouse_button(s: String) -> Option<u8> {

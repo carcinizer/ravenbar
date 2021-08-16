@@ -108,7 +108,7 @@ impl EventListeners {
 
     pub fn get(&mut self, bar: &Bar) -> Vec<Event> {
 
-        let mut v = Vec::with_capacity(10);
+        let mut v = Vec::with_capacity(40);
 
         for i in self.listeners.iter_mut() {
             i.get(bar, &mut v);
