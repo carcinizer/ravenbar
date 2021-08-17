@@ -1,0 +1,66 @@
+
+use crate::command::{Command, CommandTrait, CommandSharedState};
+use crate::utils::LogType;
+
+use std::collections::HashMap;
+
+
+#[derive(Clone, PartialEq)]
+struct SetStateCommand(String, i32);
+
+#[derive(Clone, PartialEq)]
+struct NextStateCommand(String, i32);
+
+struct StateMachine {
+    states: HashMap<String, i32>,
+    current: i32
+}
+
+#[derive(Default)]
+struct StateSingleton {
+    states: HashMap<String, StateMachine>
+}
+
+
+impl From<&Vec<String>> for StateMachine {
+    fn from(states: &Vec<String>) -> Self {
+        let states = states.iter().enumerate().map(|(c,i)| (i.clone(), c as i32)).collect();
+        Self {states, current: 0}
+    }
+}
+
+impl StateSingleton {
+    fn initialize(&mut self, states: &HashMap<String, Vec<String>>) {
+        self.states = states.iter().map(|(k,v)| (k.clone(), StateMachine::from(v))).collect();
+    }
+
+
+    fn get_state_id(&mut self, machine: &String, state: &String) -> i32 {
+        *self.states.get_mut(machine).expect(&format!("No state machine named '{}'", machine))
+             .states.get_mut(state).expect(&format!("No state '{}' in '{}'", state, machine))
+    }
+
+    fn next(&mut self, machine: &String, traverse: i32) {
+        self.states.get_mut(machine).or_else(|| {crate::log!(LogType::Warning, "No state machine named '{}'", machine); None})
+            .and_then(|x| {x.current = (x.current + traverse) % x.states.len() as i32; Some(())});
+    }
+
+    fn set(&mut self, machine: &String, state: i32) {
+        self.states.get_mut(machine).or_else(|| {crate::log!(LogType::Warning, "No state machine named '{}'", machine); None})
+            .and_then(|x| {x.current = state; Some(())});
+    }
+}
+
+impl CommandTrait for SetStateCommand {
+    fn execute(&self,  state: &mut CommandSharedState) -> String {
+        state.get::<StateSingleton>(0).set(&self.0, self.1);
+        String::new()
+    }
+}
+
+impl CommandTrait for NextStateCommand {
+    fn execute(&self,  state: &mut CommandSharedState) -> String {
+        state.get::<StateSingleton>(0).next(&self.0, self.1);
+        String::new()
+    }
+}
