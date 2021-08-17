@@ -42,7 +42,10 @@ struct CommandObject {
     network: Option<String>,
     mountpoint: Option<String>,
     card: Option<String>,
-    volume: Option<String>
+    volume: Option<String>,
+    state_machine: Option<String>,
+    state: Option<String>,
+    traverse: Option<i32>
 }
 
 
@@ -160,6 +163,15 @@ fn new_command(val: Value) -> Box<dyn CommandTrait> {
                             }
                         }
                         else {panic!("Unknown command type {}", t)}
+                    }
+                    Some(&"state") => {
+                        let sm = object.state_machine.expect("'state_*' commands require 'state_machine' to be set");
+
+                        match words.get(1) {
+                            Some(&"next") => Box::new(state::NextStateCommand(sm, object.traverse.unwrap_or(1))),
+                            Some(&"set")  => Box::new(state::SetStateCommand(sm, object.state.expect("'state_set' command requires 'state' to be set"))),
+                            _ => {panic!("Unknown command type {}", t)}
+                        }
                     }
                     _ => panic!("Unknown command type {}", t)
                 }

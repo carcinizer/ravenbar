@@ -6,10 +6,10 @@ use std::collections::HashMap;
 
 
 #[derive(Clone, PartialEq)]
-struct SetStateCommand(String, i32);
+pub struct SetStateCommand(pub String, pub String);
 
 #[derive(Clone, PartialEq)]
-struct NextStateCommand(String, i32);
+pub struct NextStateCommand(pub String, pub i32);
 
 struct StateMachine {
     states: HashMap<String, i32>,
@@ -17,7 +17,7 @@ struct StateMachine {
 }
 
 #[derive(Default)]
-struct StateSingleton {
+pub struct StateSingleton {
     states: HashMap<String, StateMachine>
 }
 
@@ -45,15 +45,20 @@ impl StateSingleton {
             .and_then(|x| {x.current = (x.current + traverse) % x.states.len() as i32; Some(())});
     }
 
-    fn set(&mut self, machine: &String, state: i32) {
+    fn set(&mut self, machine: &String, state: &String) {
         self.states.get_mut(machine).or_else(|| {crate::log!(LogType::Warning, "No state machine named '{}'", machine); None})
-            .and_then(|x| {x.current = state; Some(())});
+            .and_then(|x| {
+                x.current = *x.states.get(state)
+                    .unwrap_or_else(|| {
+                        crate::log!(LogType::Warning, "No state machine named '{}'", machine);
+                        &x.current
+            }); Some(())});
     }
 }
 
 impl CommandTrait for SetStateCommand {
     fn execute(&self,  state: &mut CommandSharedState) -> String {
-        state.get::<StateSingleton>(0).set(&self.0, self.1);
+        state.get::<StateSingleton>(0).set(&self.0, &self.1);
         String::new()
     }
 }
