@@ -42,7 +42,8 @@ pub struct BarConfig {
     pub widgets_right: Vec<BarConfigWidget>,
     pub default_bg: String,
 
-    pub fonts: HashMap<String, Vec<String>>
+    pub fonts: HashMap<String, Vec<String>>,
+    pub states: HashMap<String, Vec<String>>
 }
 
 
@@ -56,6 +57,7 @@ impl BarConfig {
         let mut widget_right_arr = Vec::<Value>::new();
         let mut fonts = HashMap::<String, Vec<String>>::new();
         let mut templates = HashMap::<String, BarConfigWidget>::new();
+        let mut states = HashMap::<String, Vec<String>>::new();
         
         // Insert the default font
         fonts.insert("default".to_string(), vec!("Monospace".to_string()));
@@ -108,6 +110,21 @@ impl BarConfig {
                             }
                             
                             fonts.insert(event.clone(), names);
+                        }
+                        else {panic!("'font' must be either a string or an array of strings")}
+                    }
+                    "state" => {
+                        if let Value::Sequence(a) = val {
+                            let mut s = Vec::with_capacity(a.len());
+                            
+                            for i in a.iter() {
+                                if let Value::String(x) = i {
+                                    s.push(x.clone());
+                                }
+                                else {panic!("'state.{}' must be an array of strings", event.clone())}
+                            }
+                            
+                            states.insert(event.clone(), s);
                         }
                         else {panic!("'font' must be either a string or an array of strings")}
                     }
@@ -166,7 +183,7 @@ impl BarConfig {
             None => "#222233".to_string()
         };
 
-        Ok(BarConfig {properties, widgets_left, widgets_right, fonts, default_bg})
+        Ok(BarConfig {properties, widgets_left, widgets_right, fonts, default_bg, states})
     }
 
     pub fn get_files_to_watch(&self) -> HashMap<PathBuf, std::time::SystemTime> {
