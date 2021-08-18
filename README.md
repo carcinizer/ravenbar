@@ -4,15 +4,11 @@ Ravenbar is a customizable status bar for Linux and X11 written in Rust. The key
 
 It's currently WIP, so things may change.
 
-
-
 ## Building/Installation
 
 To build this project, simply clone this repository and run:
 
 `cargo build --release`
-
-
 
 ## Usage
 
@@ -25,8 +21,6 @@ This will use my_config.yml stored in your ~/.config/ravenbar folder.
 You can write an example config if you don't know where to begin:
 
 `ravenbar --example-config my_config`
-
-
 
 ## How to write a config
 
@@ -66,6 +60,7 @@ Note: Every mouse event is only activated for widget under the cursor in case of
 | `on_release[.button]`        | Activates when the mouse is released once.                                                                                                           |
 | `on_release_cont[.button]`   | Activates when the mouse is beign released.                                                                                                          |
 | `on_file_changed.{filename}` | Activates when the file modification date is changed. `filename` is relative to config directory and does no character escaping beyond YAML standard |
+| `on_state.{machine}={state}` | Activates when the state of a given state machine is equal to a given string. See State section for more detail                                      |
 
 #### 3. Non-property fields
 
@@ -80,6 +75,7 @@ Bar fields:
 | `widgets_left`    | Widgets on the left side of a bar.                                                                                                                          |
 | `widgets_right`   | Widgets on the right side of a bar.                                                                                                                         |
 | `font[.{name}]`   | A string (font name) or a list of strings (default font and its fallbacks, may be useful for eg. emoji). Widgets can refer to a non-default font by `name`. |
+| `state.{name}`    | Declares a state machine and its states. See State section for more detail                                                                                  |
 
 Widget fields:
 
@@ -148,14 +144,29 @@ Command may be one of the following:
 
 A type may be one of the following:
 
-| Type                    | Description                                                                                                                                                                                                                                     | Options                                                                                                                 |
-|:----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `cpu_usage`             | CPU usage                                                                                                                                                                                                                                       | core - optional - integer                                                                                               |
-| `cpu_freq`              | CPU frequency                                                                                                                                                                                                                                   | `core` - optional - integer                                                                                             |
-| `(mem\|swap\|disk)_{A}` | Describes RAM/Swap/Disk statistics:  A is one of usage, percent, total, free - total usage/usage percentage/total capacity/free space, for example `mem_free` - amount of RAM available                                                         | `mountpoint` - required - disks only - mountpoint of a disk                                                             |
-| `net_{A}_{B}[_{C}]`     | Net statistics: A is "upload" or "download", B is one of: "bits", "bytes", "packets", "errors", C may be nothing (per second), "since" (since last update) or "total". Example - `net_download_bytes` - current download speed in (k/M/G)bits/s | `network` - network interface name, as reported by `ip addr`                                                            |
-| `alsa_volume_get`       | Get ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name                                                                                           |
-| `alsa_volume_set`       | Set ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name, `volume` - volume change, for example "+5%", "-3%" or "5%" (change volume to exactly 5%) |
+| Type                    | Description                                                                                                                                                                                                                                     | Options                                                                                                                                          |
+|:----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cpu_usage`             | CPU usage                                                                                                                                                                                                                                       | core - optional - integer                                                                                                                        |
+| `cpu_freq`              | CPU frequency                                                                                                                                                                                                                                   | `core` - optional - integer                                                                                                                      |
+| `(mem\|swap\|disk)_{A}` | Describes RAM/Swap/Disk statistics:  A is one of usage, percent, total, free - total usage/usage percentage/total capacity/free space, for example `mem_free` - amount of RAM available                                                         | `mountpoint` - required - disks only - mountpoint of a disk                                                                                      |
+| `net_{A}_{B}[_{C}]`     | Net statistics: A is "upload" or "download", B is one of: "bits", "bytes", "packets", "errors", C may be nothing (per second), "since" (since last update) or "total". Example - `net_download_bytes` - current download speed in (k/M/G)bits/s | `network` - network interface name, as reported by `ip addr`                                                                                     |
+| `alsa_volume_get`       | Get ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name                                                                                                                    |
+| `alsa_volume_set`       | Set ALSA volume                                                                                                                                                                                                                                 | `card` - optional - card name, `volume` - volume change, for example "+5%", "-3%" or "5%" (change volume to exactly 5%)                          |
+| `state_set`             | Set state machine's state to a given state name                                                                                                                                                                                                 | `machine` - state machine name, `state` - state name                                                                                             |
+| `state_next`            | Let state machine jump to the next state                                                                                                                                                                                                        | `machine` - state machine name, `traverse` - which state to jump to, e.g. 1 - next, 2 - the one after the next, -1 - previous etc. (default = 1) |
+
+#### 8. States
+
+State machines are special objects accessible by both events (`.on_state.{machine}={state}`) and internal commands (`state_set`, `state_next`). To use them, a `state.{machine}`  must be declared at the bar level, like so:
+
+```yaml
+state.my_state_machine:
+    - this_is_default_state
+    - this_is_a_next_state
+    - and_another
+```
+
+
 
 TODO:
 
