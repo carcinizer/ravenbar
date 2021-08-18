@@ -1,5 +1,5 @@
 
-use crate::command::{Command, CommandTrait, CommandSharedState};
+use crate::command::{CommandTrait, CommandSharedState};
 use crate::utils::LogType;
 
 use std::collections::HashMap;
