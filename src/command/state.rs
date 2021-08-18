@@ -30,12 +30,12 @@ impl From<&Vec<String>> for StateMachine {
 }
 
 impl StateSingleton {
-    fn initialize(&mut self, states: &HashMap<String, Vec<String>>) {
+    pub fn initialize(&mut self, states: &HashMap<String, Vec<String>>) {
         self.states = states.iter().map(|(k,v)| (k.clone(), StateMachine::from(v))).collect();
     }
 
 
-    fn get_state_id(&mut self, machine: &String, state: &String) -> i32 {
+    pub fn get_state_id(&mut self, machine: &String, state: &String) -> i32 {
         *self.states.get_mut(machine).expect(&format!("No state machine named '{}'", machine))
              .states.get_mut(state).expect(&format!("No state '{}' in '{}'", state, machine))
     }
@@ -53,6 +53,11 @@ impl StateSingleton {
                         crate::log!(LogType::Warning, "No state machine named '{}'", machine);
                         &x.current
             }); Some(())});
+    }
+
+    pub fn get(&self, machine: &String) -> i32 {
+        // "get" here should never fail after singleton + listener initialization
+        self.states.get(machine).and_then(|x| Some(x.current)).unwrap_or(-1)
     }
 }
 

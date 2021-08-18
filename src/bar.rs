@@ -7,6 +7,7 @@ use crate::config::{BarConfig, BarConfigWidget};
 use crate::draw::{Drawable, DrawableSet, DrawFGInfo};
 use crate::font::Font;
 use crate::utils::Log;
+use crate::command::state::StateSingleton;
 
 use std::time::Instant;
 use std::cell::RefCell;
@@ -46,14 +47,14 @@ pub struct Bar {
     geometry: WindowGeometry,
     fake_geometry: WindowGeometry,
     window: Window,
-    cmdstate: CommandSharedState,
+    cmdstate: RefCell<CommandSharedState>,
     event_listeners: RefCell<EventListeners>
 }
 
-fn create_widgets(widgets: &Vec<BarConfigWidget>, listeners: &mut EventListeners) -> Vec<RefCell<Widget>> {
+fn create_widgets(widgets: &Vec<BarConfigWidget>, listeners: &mut EventListeners, cmd: &mut CommandSharedState) -> Vec<RefCell<Widget>> {
     widgets.iter()
         .map( |widget| {
-            let properties = WidgetProperties::from(&widget.properties, listeners);
+            let properties = WidgetProperties::from(&widget.properties, listeners, cmd);
             let current = properties.as_current(&vec![Event::default()], false);
             RefCell::new(Widget {
                 properties,
@@ -74,11 +75,14 @@ impl Bar {
 
     pub fn create(cfg: BarConfig) -> Self {
 
-        let event_listeners = RefCell::new(EventListeners::new());
-        let properties = BarProperties::from(&cfg.properties, &mut event_listeners.borrow_mut());
+        let mut cmdstate = CommandSharedState::new();
+        cmdstate.get::<StateSingleton>(0).initialize(&cfg.states);
 
-        let widgets_left  = create_widgets(&cfg.widgets_left, &mut event_listeners.borrow_mut());
-        let widgets_right = create_widgets(&cfg.widgets_right, &mut event_listeners.borrow_mut());
+        let event_listeners = RefCell::new(EventListeners::new());
+        let properties = BarProperties::from(&cfg.properties, &mut event_listeners.borrow_mut(), &mut cmdstate);
+
+        let widgets_left  = create_widgets(&cfg.widgets_left, &mut event_listeners.borrow_mut(), &mut cmdstate);
+        let widgets_right = create_widgets(&cfg.widgets_right, &mut event_listeners.borrow_mut(), &mut cmdstate);
 
         let window = Window::new().expect("Failed to create window");
 
@@ -91,7 +95,7 @@ impl Bar {
         let mut bar = Self {properties, widgets_left, widgets_right, window, 
             geometry: WindowGeometry::new(), fake_geometry: WindowGeometry::new(),
             current,
-            cmdstate: CommandSharedState::new(),
+            cmdstate: RefCell::new(cmdstate),
             default_bg: Drawable::from(cfg.default_bg),
             fonts,
             offset: 0,
@@ -140,11 +144,13 @@ impl Bar {
             else {bar_redraw || force || width_change != 0};
 
             // Update widget text
+            let cmdstate = &mut self.get_cmd_state();
+
             if force || i.last_time_updated.elapsed().as_millis() > (i.current.interval * 1000.0) as u128
                      || i.last_event_updated != i.properties.command.get_event(e,m) 
-                     || i.current.command.updated(&mut self.cmdstate) {
+                     || i.current.command.updated(cmdstate) {
                      
-                let new_cmd_out = i.current.command.execute(&mut self.cmdstate);
+                let new_cmd_out = i.current.command.execute(cmdstate);
                 i.last_time_updated = Instant::now();
                 i.last_event_updated = i.properties.command.get_event(e,m);
 
@@ -155,7 +161,7 @@ impl Bar {
             }
 
             // Perform action
-            i.current.action.execute(&mut self.cmdstate);
+            i.current.action.execute(cmdstate);
             
             if i.needs_redraw {
                 // New draw info
@@ -299,6 +305,10 @@ impl Bar {
 
     pub fn get_window(&self) -> &Window {
         &self.window
+    }
+
+    pub fn get_cmd_state(&self) -> std::cell::RefMut<CommandSharedState> {
+        self.cmdstate.borrow_mut()
     }
 }
 

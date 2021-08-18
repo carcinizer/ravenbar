@@ -1,5 +1,6 @@
 
 use crate::bar::Bar;
+use crate::command::CommandSharedState;
 
 use std::fmt::Debug;
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ use dyn_clone::DynClone;
 mod files;
 mod window;
 mod default;
+mod state;
 
 
 pub type Event = Box<dyn EventTrait>;
@@ -32,7 +34,7 @@ pub trait EventListener {
     fn reported_events(&self) -> &'static[&'static str];
     
     /// Create event object from event description and optionally remember its settings
-    fn event(&mut self, event: &String, settings: &String) -> Event;
+    fn event(&mut self, cmd: &mut CommandSharedState, event: &String, settings: &String) -> Event;
     
     /// Add events to the event vector
     fn get(&mut self, bar: &Bar, v: &mut Vec<Event>);
@@ -87,6 +89,7 @@ impl EventListeners {
         let listeners: Vec<Box<dyn EventListener>> = vec![
             Box::new(files::FilesListener::new()),
             Box::new(window::WindowListener::new()),
+            Box::new(state::StateListener::new()),
             Box::new(default::DefaultListener)
         ];
 
@@ -99,11 +102,11 @@ impl EventListeners {
         Self {listeners, event_map}
     }
 
-    pub fn event(&mut self, event: &String, settings: &String) -> Event {
+    pub fn event(&mut self, cmd: &mut CommandSharedState, event: &String, settings: &String) -> Event {
         let e = || panic!("Invalid event {}.{}: No listener found for this event", event, settings);
 
         self.listeners[*self.event_map.get(event).unwrap_or_else(e)]
-            .event(event, settings)
+            .event(cmd, event, settings)
     }
 
     pub fn get(&mut self, bar: &Bar) -> Vec<Event> {

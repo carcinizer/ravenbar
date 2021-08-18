@@ -11,7 +11,7 @@ use dyn_clone::DynClone;
 mod common;
 mod sysinfo;
 mod alsa;
-mod state;
+pub mod state;
 
 // A general trait for commands, concrete implementations are in command/ directory
 pub trait CommandTrait: 'static + Any + DynClone {

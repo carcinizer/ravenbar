@@ -64,14 +64,14 @@ impl EventListener for WindowListener {
         WINDOW_EVENTS
     }
 
-    fn event(&mut self, event: &String, settings: &String) -> Event {
+    fn event(&mut self, _cmd: &mut crate::command::CommandSharedState, event: &String, settings: &String) -> Event {
         Box::new(match &event[..] {
             "on_hover" => WindowEvent::Hover,
             "on_press" => WindowEvent::ButtonPress(mouse_button(settings.clone())),
             "on_press_cont" => WindowEvent::ButtonPressCont(mouse_button(settings.clone())),
             "on_release" => WindowEvent::ButtonRelease(mouse_button(settings.clone())),
             "on_release_cont" => WindowEvent::ButtonReleaseCont(mouse_button(settings.clone())),
-            _ => panic!("Unknown event {}.{} (reported by FilesListener)", event, settings.clone())
+            _ => panic!("Unknown event {}.{} (reported by WindowListener)", event, settings.clone())
         })
     }
 

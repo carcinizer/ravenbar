@@ -35,7 +35,7 @@ impl<T> Property<T> {
 }
 
 macro_rules! property {
-    ($var:expr, $member:ident, $type:ident, $default:expr, $listeners:ident) => {{
+    ($var:expr, $member:ident, $type:ident, $default:expr, $listeners:ident, $cmd:ident) => {{
         
         use std::collections::HashMap;
         
@@ -44,7 +44,7 @@ macro_rules! property {
         
         for ((k,s),v) in $var.iter() {
             if let Some(x) = &v.$member {
-                map.insert($listeners.event(k, s), $type::from(x.clone()));
+                map.insert($listeners.event($cmd, k, s), $type::from(x.clone()));
             }
         }
         Property {map}
@@ -96,9 +96,9 @@ macro_rules! property_struct {
         }
 
         impl $Properties {
-            pub fn from(config: &HashMap<(String, String), $ConfigProperties>, listeners: &mut EventListeners) -> Self {
+            pub fn from(config: &HashMap<(String, String), $ConfigProperties>, listeners: &mut EventListeners, cmd: &mut CommandSharedState) -> Self {
                 Self {
-                    $($name: property!(config, $name, $type, $default, listeners),)*
+                    $($name: property!(config, $name, $type, $default, listeners, cmd),)*
                 }
             }
         }

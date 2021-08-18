@@ -37,7 +37,7 @@ impl EventListener for FilesListener {
         FILES_EVENTS
     }
 
-    fn event(&mut self, event: &String, settings: &String) -> Event {
+    fn event(&mut self, _cmd: &mut crate::command::CommandSharedState, event: &String, settings: &String) -> Event {
         match &event[..] {
             "on_file_changed" => {
                 let dir = config_dir().join(settings);

@@ -24,7 +24,7 @@ impl EventListener for DefaultListener {
         FILES_EVENTS
     }
 
-    fn event(&mut self, event: &String, settings: &String) -> Event {
+    fn event(&mut self, _cmd: &mut crate::command::CommandSharedState, event: &String, settings: &String) -> Event {
         match &event[..] {
             "default" => Box::new(DefaultEvent),
             _ => panic!("Unknown event {}.{} (reported by DefaultListener)", event, settings)
